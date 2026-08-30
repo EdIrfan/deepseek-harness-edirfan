@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { RequestContextPricing, Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -307,7 +307,9 @@ describe('tokenUsage session projection', () => {
   const RATES = {
     inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.014, cacheWritePerMTok: 0,
   }
-  function priceRoute(session: Session, provider: string, model: string, rates?: unknown): void {
+  function priceRoute(
+    session: Session, provider: string, model: string, rates?: RequestContextPricing,
+  ): void {
     session.append('request/context', {
       provider, model, ...rates === undefined ? {} : { pricing: rates },
     })
