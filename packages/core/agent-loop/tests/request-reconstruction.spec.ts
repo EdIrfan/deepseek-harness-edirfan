@@ -776,6 +776,40 @@ describe('request/context capacity records', () => {
     expect(agent.session.surface.nodes).not.toContain(records[0]?.seq)
   })
 
+  it('records adapter-resolved price rates on request/context and re-logs on a rate change', async () => {
+    const rates = {
+      inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.014, cacheWritePerMTok: 0,
+    }
+    const adapter = new class extends MockAdapter {
+      priced = true
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider,
+          id: model,
+          name: model,
+          ...this.priced ? { pricing: rates } : {},
+        })
+      }
+    }([textResponse('a'), textResponse('b'), textResponse('c')])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('context-pricing'), { provider: 'mock', model: 'mock' })
+
+    send(agent, 'first')
+    await waitForIdle(ctx, agent)
+    send(agent, 'second')
+    await waitForIdle(ctx, agent)
+    adapter.priced = false
+    send(agent, 'third')
+    await waitForIdle(ctx, agent)
+
+    expect(agent.session.events
+      .filter(event => event.type === 'request/context')
+      .map(event => event.data)).toEqual([
+      { provider: 'mock', model: 'mock', pricing: rates },
+      { provider: 'mock', model: 'mock' },
+    ])
+  })
+
   it('records a second capacity when the route changes mid-session', async () => {
     const adapter = capacityAdapter(
       { small: 64_000, large: 256_000 },

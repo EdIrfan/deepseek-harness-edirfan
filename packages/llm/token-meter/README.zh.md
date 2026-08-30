@@ -48,7 +48,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 `contextBreakdown` 携带启发式的 `systemTokens`、`toolsTokens` 与 `messageTokens`，描述上下文的组成而非提供方计费规模。envelope 数字在每条 `request/header` 上按后者胜重新计价；消息数字重放与 `contextPressure` 相同的 O(1) 影子价折叠，因此在完整计量的日志上，它在每个事件边界都等于 `measure().nodes[].heuristicTokens` 之和，压缩会按记录的影子价缩小该值。路由定价的 `measure().surfaceTokens` 在路由模型重新为图片计价时会与该值不同。若替换前没有紧邻的影子价声明，这个有界投影会保持不变，因为它无法重建被替换区间。三个数字都使用测量服务的固定启发式规则，属于估算值。它们加起来不等于 `projectedTokens`，后者的提供方锚点体现了这些明细行仍然带有的误差（按「4 字符 ≈ 1 token」计价时，CJK 文本与 JSON schema 会被严重低估）。请把它们当作近似的**组成**呈现，而不是总量。
 
-`deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整 Turn 折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。
+`deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整 Turn 折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。当每次计费尝试都有路由、且该路由的 `request/context` 携带了价格费率时，折叠还会输出估算的 `costUsd`——`costOf`（`src/pricing.ts`）用精确的提供方上报 token 数乘以记录的每百万 token 费率。该估算使用日志里已有的提供方数字与静态目录费率，零模型 token 成本。提供方未上报的缓存读写按零计价，费率也只与随包目录一样新，因此消费方把该数字标为估算。
 
 ### 组合
 

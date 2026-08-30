@@ -164,6 +164,8 @@ export interface PreparedLlmCall {
   readonly retryPolicy: ResolvedRetryPolicy
   /** Detached context metadata resolved with the registration-bound call. */
   readonly context?: LlmModelContext
+  /** Detached per-token price rates (USD per million tokens) resolved with the call, when the adapter supplied them. */
+  readonly pricing?: LlmModelPricing
   /** Exact model modalities captured with the adapter dispatch generation. */
   readonly inputModalities?: readonly ModelModality[]
   /** Config fields materialized by the captured adapter rather than proposed by the caller. */
@@ -930,6 +932,9 @@ export class LlmRuntime extends TypertRemoteService {
     const context = resolved.context === undefined
       ? undefined
       : deepFreeze(structuredClone(resolved.context))
+    const pricing = modelInfo.pricing === undefined
+      ? undefined
+      : deepFreeze(structuredClone(modelInfo.pricing))
     const adapterDefaults = deepFreeze<LlmCallConfigAdapterDefaults>({
       ...config.reasoningEffort === undefined && resolvedConfig.reasoningEffort !== undefined
         ? { reasoningEffort: true }
@@ -944,6 +949,7 @@ export class LlmRuntime extends TypertRemoteService {
       retryPolicy: registration.retryPolicy,
       adapterDefaults,
       ...context === undefined ? {} : { context },
+      ...pricing === undefined ? {} : { pricing },
       ...modelInfo.inputModalities === undefined
         ? {}
         : { inputModalities: Object.freeze([...modelInfo.inputModalities]) },

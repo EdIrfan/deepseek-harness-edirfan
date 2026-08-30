@@ -56,6 +56,18 @@ type PreparedStep =
     assembly: PromptAssembly
   }
 
+/** Whether two optional `request/context` price structures carry the same four rates. */
+function pricingEqual(
+  a: RequestContext['pricing'],
+  b: RequestContext['pricing'],
+): boolean {
+  if (a === undefined || b === undefined) return a === b
+  return a.inputPerMTok === b.inputPerMTok
+    && a.outputPerMTok === b.outputPerMTok
+    && a.cacheReadPerMTok === b.cacheReadPerMTok
+    && a.cacheWritePerMTok === b.cacheWritePerMTok
+}
+
 /** Remove adapter-derived values before plugins propose the next request config. */
 function requestProposal(header: EpochHeader): LlmCallConfig {
   if (header.adapterDefaults === undefined) return header.config
@@ -517,15 +529,25 @@ export class ReactLoopAgent implements Agent {
     this.requestSurfaceGeneration = surfaceGeneration
 
     const contextWindow = preparedCall?.context?.contextWindow
+    const pricing = preparedCall?.pricing
     const requestContext: RequestContext = {
       provider: config.provider,
       model: config.model,
       ...contextWindow === undefined ? {} : { contextWindow },
+      ...pricing === undefined ? {} : {
+        pricing: {
+          inputPerMTok: pricing.inputPerMTok,
+          outputPerMTok: pricing.outputPerMTok,
+          cacheReadPerMTok: pricing.cacheReadPerMTok,
+          cacheWritePerMTok: pricing.cacheWritePerMTok,
+        },
+      },
     }
     const previousContext = session.requestContext()
     if (previousContext?.provider !== requestContext.provider
       || previousContext.model !== requestContext.model
-      || previousContext.contextWindow !== requestContext.contextWindow) {
+      || previousContext.contextWindow !== requestContext.contextWindow
+      || !pricingEqual(previousContext.pricing, requestContext.pricing)) {
       session.append('request/context', requestContext)
     }
     signal.throwIfAborted()

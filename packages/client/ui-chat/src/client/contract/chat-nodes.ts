@@ -80,6 +80,8 @@ export interface TurnTokenUsage {
   readonly reasoningTokens?: number
   /** Present only when every billed attempt has provider/model attribution. */
   readonly routes?: readonly TurnTokenUsageRoute[]
+  /** Estimated turn cost in USD; present only when every attempt's route carried price rates. */
+  readonly costUsd?: number
 }
 
 /** Turn-local footer row that owns actions and optional feature contributions. */

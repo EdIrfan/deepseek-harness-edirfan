@@ -192,6 +192,14 @@ export interface EpochHeader {
   tools?: ToolSchema[]
 }
 
+/** Per-token USD rates (per million tokens) recorded with one request. */
+export interface RequestContextPricing {
+  readonly inputPerMTok: number
+  readonly outputPerMTok: number
+  readonly cacheReadPerMTok: number
+  readonly cacheWritePerMTok: number
+}
+
 /** Registration-bound metadata for one resolved model route. */
 export interface RequestContext {
   /** Registered provider route the metadata belongs to. */
@@ -200,6 +208,14 @@ export interface RequestContext {
   model: string
   /** Maximum combined request and response context in tokens, when advertised. */
   contextWindow?: number
+  /**
+   * Per-token price rates (USD per million tokens) for {@link model} on
+   * {@link provider} at request time, when the adapter resolved them.
+   * Presentation and cost-estimate metadata — never sent to the model; carried
+   * here so cost views reconstruct from the log alone. Optional and additive:
+   * a log written before this field simply yields no cost estimate.
+   */
+  pricing?: RequestContextPricing
 }
 
 /**

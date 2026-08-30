@@ -161,7 +161,7 @@ Canonical form represents an empty system prompt or tool list as an absent field
 
 ### The route capacity event: `request/context`
 
-The context metadata of the route a request resolved to is separate logged state, appended beside `request/header` inside the same step and only when the provider, model, or capacity differs from the previous record. It stays outside `EpochHeader` because that type is the reconstruction contract compared field-wise by `headerEquals`: capacity describes a route, not a request input, so folding it in would let a capacity change register as a request-envelope `change` and would pull adapter metadata into the loop's reconstruction invariant. Like `request/header`, it is not a `SurfaceEventType` and produces no LLM message. `session.requestContext()` folds the latest record incrementally. A route whose adapter advertises no capacity is recorded with `contextWindow` absent, so the new record clears an older route's capacity.
+The context metadata of the route a request resolved to is separate logged state, appended beside `request/header` inside the same step and only when the provider, model, capacity, or price rates differ from the previous record. It stays outside `EpochHeader` because that type is the reconstruction contract compared field-wise by `headerEquals`: capacity describes a route, not a request input, so folding it in would let a capacity change register as a request-envelope `change` and would pull adapter metadata into the loop's reconstruction invariant. Like `request/header`, it is not a `SurfaceEventType` and produces no LLM message. `session.requestContext()` folds the latest record incrementally. A route whose adapter advertises no capacity is recorded with `contextWindow` absent, so the new record clears an older route's capacity. The optional `pricing` (per-million-token USD rates) is presentation and cost-estimate metadata carried here so cost views reconstruct from the log alone; it never reaches a model request, is additive, and does not move `SESSION_FORMAT_VERSION`.
 
 ```ts type-equiv
 /** Registration-bound metadata for one resolved model route. */
@@ -172,6 +172,14 @@ interface RequestContext {
   model: string
   /** Maximum combined request and response context in tokens, when advertised. */
   contextWindow?: number
+  /**
+   * Per-token price rates (USD per million tokens) for {@link model} on
+   * {@link provider} at request time, when the adapter resolved them.
+   * Presentation and cost-estimate metadata — never sent to the model; carried
+   * here so cost views reconstruct from the log alone. Optional and additive:
+   * a log written before this field simply yields no cost estimate.
+   */
+  pricing?: RequestContextPricing
 }
 ```
 

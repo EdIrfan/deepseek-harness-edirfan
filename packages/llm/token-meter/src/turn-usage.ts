@@ -1,6 +1,7 @@
 import type { AssistantMessage, TokenUsage } from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { RequestContextPricing, SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { costOf } from './pricing.ts'
 
 /** One provider/model route that contributed a billed request attempt. */
 export interface TurnTokenUsageRoute {
@@ -23,6 +24,18 @@ export interface TurnTokenUsage {
   readonly reasoningTokens?: number
   /** Present only when every billed attempt has provider/model attribution. */
   readonly routes?: readonly TurnTokenUsageRoute[]
+  /**
+   * Estimated turn cost in USD. Present only when every billed attempt has a
+   * route AND that route's `request/context` carried price rates. Cache reads
+   * and writes a provider did not report are priced as zero, matching how
+   * every other token-meter fold treats an absent bucket.
+   */
+  readonly costUsd?: number
+}
+
+/** `"provider\0model"` key for the per-route price and bucket maps. */
+function routeKey(route: TurnTokenUsageRoute): string {
+  return `${route.provider}\0${route.model}`
 }
 
 interface NormalizedAttempt {
@@ -118,7 +131,33 @@ function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): Normali
   }
 }
 
-function aggregateAttempts(attempts: readonly NormalizedAttempt[]): TurnTokenUsage | undefined {
+/**
+ * Sum the turn's estimated cost, or `undefined` when it cannot be priced:
+ * every attempt must carry a route and that route must have logged rates.
+ */
+function turnCost(
+  attempts: readonly NormalizedAttempt[],
+  pricingByRoute: ReadonlyMap<string, RequestContextPricing>,
+): number | undefined {
+  let total = 0
+  for (const attempt of attempts) {
+    if (attempt.route === undefined) return undefined
+    const rates = pricingByRoute.get(routeKey(attempt.route))
+    if (rates === undefined) return undefined
+    total += costOf({
+      uncachedInputTokens: attempt.inputTokens,
+      outputTokens: attempt.outputTokens,
+      cacheReadTokens: attempt.cacheReadTokens ?? 0,
+      cacheWriteTokens: attempt.cacheWriteTokens ?? 0,
+    }, rates)
+  }
+  return Number.isFinite(total) ? total : undefined
+}
+
+function aggregateAttempts(
+  attempts: readonly NormalizedAttempt[],
+  pricingByRoute: ReadonlyMap<string, RequestContextPricing>,
+): TurnTokenUsage | undefined {
   if (attempts.length === 0) return undefined
   const inputTokens = safeSum(attempts.map(attempt => attempt.inputTokens))
   const outputTokens = safeSum(attempts.map(attempt => attempt.outputTokens))
@@ -138,9 +177,11 @@ function aggregateAttempts(attempts: readonly NormalizedAttempt[]): TurnTokenUsa
   const attributed = attempts.map(attempt => attempt.route)
   if (attributed.every((route): route is TurnTokenUsageRoute => route !== undefined)) {
     const unique = new Map<string, TurnTokenUsageRoute>()
-    for (const route of attributed) unique.set(`${route.provider}\0${route.model}`, route)
+    for (const route of attributed) unique.set(routeKey(route), route)
     routes = [...unique.values()]
   }
+
+  const costUsd = turnCost(attempts, pricingByRoute)
 
   return {
     uncachedInputTokens: inputTokens,
@@ -150,6 +191,7 @@ function aggregateAttempts(attempts: readonly NormalizedAttempt[]): TurnTokenUsa
     ...cacheWriteTokens === undefined ? {} : { cacheWriteTokens },
     ...reasoningTokens === undefined ? {} : { reasoningTokens },
     ...routes === undefined ? {} : { routes },
+    ...costUsd === undefined ? {} : { costUsd },
   }
 }
 
@@ -173,6 +215,9 @@ function sameAttempt(
 export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnTokenUsage | undefined {
   let state: AttemptState = { kind: 'idle' }
   const attempts: NormalizedAttempt[] = []
+  // Last-wins price per route from this turn's `request/context` events; the
+  // agent loop appends one before each attempt runs.
+  const pricingByRoute = new Map<string, RequestContextPricing>()
   let turn: number | undefined
   let sawEnd = false
   let invalid = false
@@ -204,6 +249,12 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
     if (sawEnd) {
       invalid = true
       break
+    }
+    if (event.type === 'request/context') {
+      if (event.data.pricing !== undefined) {
+        pricingByRoute.set(`${event.data.provider}\0${event.data.model}`, event.data.pricing)
+      }
+      continue
     }
     if (event.type === 'step/start') {
       if (event.data.turn !== turn || state.kind !== 'idle') invalid = true
@@ -267,5 +318,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
     }
   }
 
-  return invalid || !sawEnd || state.kind !== 'idle' ? undefined : aggregateAttempts(attempts)
+  return invalid || !sawEnd || state.kind !== 'idle'
+    ? undefined
+    : aggregateAttempts(attempts, pricingByRoute)
 }

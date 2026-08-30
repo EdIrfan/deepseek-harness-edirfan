@@ -15,6 +15,19 @@ export function formatTokens(value: number, t: ChatViewSlotProps['t']): string {
 }
 
 /**
+ * Estimated USD cost for a Turn: `$1.23`, `$0.0042` (up to four decimals below a
+ * cent), `< $0.0001` for a tiny positive, `$0` for exact zero.
+ * @param usd - a non-negative dollar amount.
+ * @returns the display string.
+ */
+export function formatUsd(usd: number): string {
+  if (usd === 0) return '$0'
+  if (usd < 0.0001) return '< $0.0001'
+  if (usd < 0.01) return `$${usd.toFixed(4).replace(/0+$/, '')}`
+  return `$${usd.toFixed(2)}`
+}
+
+/**
  * Exact integer token count with locale-owned digit grouping.
  * @param value - non-negative safe integer token count.
  * @param t - Chat locale seat.
