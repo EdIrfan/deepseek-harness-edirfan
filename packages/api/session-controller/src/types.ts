@@ -133,11 +133,21 @@ export interface ModelCatalogModel {
   readonly pricing?: ModelPricing
 }
 
+/** Live provider-account figures (USD) for a group whose provider bills a prepaid balance. */
+export interface ModelProviderAccount {
+  /** Spendable balance remaining, when the provider reports a cap. */
+  readonly balanceUsd?: number
+  /** Cumulative spend on the configured key, when the provider reports it. */
+  readonly usageUsd?: number
+}
+
 /** One provider and its successfully loaded model catalog. */
 export interface ModelProviderGroup {
   readonly id: string
   readonly name: string
   readonly models: readonly ModelCatalogModel[]
+  /** Live account balance for a billed-balance provider (e.g. OpenRouter), when resolved. */
+  readonly account?: ModelProviderAccount
 }
 
 /** One provider whose model catalog lookup failed. */

@@ -98,6 +98,8 @@ A profile's `models` list replaces the route's installed catalog rather than ext
 
 An installed-catalog model resolves with the catalog's per-token price rates (USD per million tokens), surfaced on the LLM service's resolved model info as `pricing`; a hand-declared route carries no price and resolves none. Rates pass through unscaled — pi-ai's `cost` unit is this seam's unit — and volume tiers are flattened to the base rates. Pricing is display metadata only.
 
+A route whose endpoint host is `openrouter.ai` answers `ctx.llm.providerAccountBalance` from OpenRouter's `GET /api/v1/key` (the key's remaining balance and cumulative spend), using the same resolved credential a request would. Any other route answers `undefined`. The query is not itself token-billed. A non-2xx reply or a network fault raises `ACCOUNT_QUERY_FAILED`; an abort raises `ABORTED`.
+
 ### Run with reasoning and wire compatibility
 
 `reasoningEfforts` declares a model's selectable thinking levels: each key is a level selectors offer, its value the spelling dispatch sends on the wire, so `max: ultra` renames a level for a gateway with its own vocabulary. Omitting the field keeps the installed catalog entry's capability; `false` declares a non-reasoning model. `compat` switches reshape the request for endpoints pi-ai cannot recognize — which role carries the system prompt, which field caps output, how a thinking level travels — configurable per route and per model. A model neither the entry nor the installed catalog sizes takes the route's `defaultContextWindow` and `defaultMaxTokens` fallbacks.

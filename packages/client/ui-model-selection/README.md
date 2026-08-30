@@ -29,7 +29,7 @@ Mount this plugin alongside `ui-conversation` and the commands package; the comp
 
 ### Model and effort
 
-Models stay grouped by provider. Each row shows the model name and, beneath it, the resolved context window when the adapter reports one; catalog descriptions remain available to other consumers. The `/model` popup applies the selected model's default effort; the composer can then choose any advertised effort. An adapter without reasoning metadata leaves the Effort row absent; there is no arbitrary effort input.
+Models stay grouped by provider. Each row shows the model name and, beneath it, the resolved context window and per-token price when the adapter reports them (`128K context · $0.14 / $0.28 /Mtok`); catalog descriptions remain available to other consumers. A provider whose account carries a prepaid balance (OpenRouter) shows it beside the group name. The `/model` popup applies the selected model's default effort; the composer can then choose any advertised effort. An adapter without reasoning metadata leaves the Effort row absent; there is no arbitrary effort input.
 
 ### Unroutable sessions
 

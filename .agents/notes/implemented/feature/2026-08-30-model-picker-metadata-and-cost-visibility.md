@@ -21,6 +21,8 @@ The Web model picker (the composer model seat and the `/model` popup) showed a m
 
 **Pricing is presentation-only and never enters a model request.** No session event is added for the picker surfaces (`packages/client/AGENTS.md`: "Nothing that is only 'how to draw' enters the session log"). The downstream per-turn and per-session cost views (separate plans) do log the rates on the existing `request/context` event, which is additive and does not move `SESSION_FORMAT_VERSION`.
 
+**A route whose provider bills a prepaid balance reports it, and the group header shows it.** The `LlmAdapter` base gains an optional `providerAccountBalance(provider, signal)`; `LlmService.providerAccountBalance` delegates to it and answers `undefined` for an unregistered route or an adapter that does not implement it. The pi-ai adapter implements it for OpenRouter only: when the route's endpoint host is `openrouter.ai` it resolves the route key through the same `resolveApiKey` a request uses and reads `GET https://openrouter.ai/api/v1/key` (`limit_remaining` and `usage`) through the shared `readBoundedText`; any other host resolves `undefined`. `buildModelCatalog` folds a `ModelProviderGroup.account` per group behind a 60-second process cache and a 4-second per-query timeout, inside a `try/catch` that treats any failure as "no account" — the balance is decoration and the group must load without it. `ui-model-selection` renders `$12.40 left` beside the group name in the `/model` popup and composer model pane. OpenRouter's `/key` endpoint is not itself token-billed, so the lookup costs nothing.
+
 ## Unit choice
 
 The seam and the wire type both quote **USD per one million tokens**, the unit pi-ai's catalog already uses (`rates.input / 1_000_000 * usage.input` in pi-ai's own cost math) and the unit prices are marketed in. Storing per-million avoids a lossy `/ 1e6` at the adapter, keeps the numbers human-legible in tests and diagnostics, and matches what a cost view will render.
@@ -33,9 +35,15 @@ The seam and the wire type both quote **USD per one million tokens**, the unit p
 
 **A second `ModelCatalog` type in `api-remotes` instead of re-exporting the session-controller one.** Rejected. There is one definition, in `packages/api/session-controller/src/types.ts`, re-exported for the browser. Adding fields in one place keeps the Host builder and the client renderer from drifting.
 
-**Render context window and price as separate stacked lines.** Rejected for now. The request was "fit it in every row without making it ugly"; one ` · `-joined caption line at 12px holds both for realistic values. If a future addition (credits, a third figure) overflows it, that is the trigger to move to a two-column meta layout — recorded in `plans/README.md`.
+**Render context window and price as separate stacked lines.** Rejected for now. The request was "fit it in every row without making it ugly"; one ` · `-joined caption line at 12px holds both for realistic values. The account balance went in the group header rather than the row for the same reason. If a future per-row addition overflows the caption line, that is the trigger to move to a two-column meta layout.
 
 **Skip the all-zero guard and report `NO_COST` as `{0,0,0,0}` pricing.** Rejected. A hand-declared gateway route genuinely has no price data; showing `$0 / $0` would assert it is free. Absent pricing renders no price text, which is the honest state.
+
+**Put the OpenRouter balance lookup in a pi-ai-only `ctx.piAiAccounts` service instead of an `LlmAdapter` method.** Rejected. The seam is provider-agnostic even though only pi-ai's OpenRouter branch is implemented today; a Together or Fireworks balance is one more `host ===` branch in `account.ts`, not a new service. `session-controller` reaching a pi-ai-specific service would also be a layering inversion the adapter method avoids.
+
+**Poll the balance on a timer, or push updates.** Rejected. The value refreshes when the catalog rebuilds — on every `llm/adapters-updated`, `settings/document-updated`, and `credentials/reference-updated` event, plus each menu open — which is often enough for a slow-moving prepaid balance. A timer would spend requests to keep a decoration fresh.
+
+**Block the composer when the balance is low.** Rejected. This surface displays; it does not gate. A depleted balance fails the next request with the provider's own error, which is where that belongs.
 
 ## Consequences
 
@@ -43,12 +51,17 @@ The seam and the wire type both quote **USD per one million tokens**, the unit p
 - Price accuracy is bounded by the pinned pi-ai version: the rates are a point-in-time snapshot bundled with the package. Cost-view copy (separate plans) says "est." for this reason; the picker row shows the rate as a fact about what pi-ai shipped.
 - `INVALID_MODEL_PRICING` is a new `LlmError` code. `LlmError.code` is an open string, so no union needed updating.
 - Tiered pricing is dropped. A cost figure for a very large request will use the base rate. When a consumer needs tier accuracy, the fix is a `resolvePricing(provider, model, inputTokens)` method, not the static field.
-- `DEEPSEEK_API_KEY` was unavailable in the implementing environment (OpenRouter only); web e2e for the picker rows and any keyed snapshot re-record are deferred and tracked in `plans/README.md`. Unit, host-integration, and React-component tests cover the plumbing and rendering.
+- An OpenRouter route now shows its remaining credit balance in the picker group header. `buildModelCatalog` gains one bounded outbound request per OpenRouter provider per 60 seconds; the 4-second timeout and cache keep it off the catalog's critical path. Non-OpenRouter providers make no such request.
+- `ACCOUNT_QUERY_FAILED` is a new `LlmError` code, raised inside `account.ts` and swallowed by `buildModelCatalog`; it does not surface to the browser.
+- `DEEPSEEK_API_KEY` was unavailable in the implementing environment (OpenRouter only); web e2e for the picker rows and any keyed snapshot re-record are deferred. Unit, host-integration, and React-component tests cover the plumbing and rendering.
+- The OpenRouter balance query needs a live key and network to exercise end to end; the shipped tests stub `fetch` and never assert on a real key value.
+- `resetAccountCacheForTests()` is a test-only export on `catalog.ts` so a suite's second `buildModelCatalog` re-queries rather than reusing the 60-second cache.
 
 ## Testing
 
-- `packages/llm/llm/tests/service.spec.ts` — `normalizeModelInfo` passes valid pricing through unchanged and rejects negative, non-finite, and NaN rates with `INVALID_MODEL_PRICING`.
+- `packages/llm/llm/tests/service.spec.ts` — `normalizeModelInfo` passes valid pricing through unchanged and rejects negative, non-finite, and NaN rates with `INVALID_MODEL_PRICING`; `providerAccountBalance` delegates to the adapter and answers `undefined` for an unimplemented or unregistered route.
 - `packages/llm/llm-pi-ai/tests/adapter.spec.ts` — a pi-ai catalog route (`deepseek-v4-flash`) resolves per-million pricing; a hand-declared route resolves none.
-- `packages/api/session-controller/tests/session-models.host.spec.ts` — `buildModelCatalog` carries `contextWindow` and `pricing` onto the wire model and omits both when the adapter resolved neither.
-- `packages/client/ui-model-selection/tests/format.spec.ts` — the three formatters, including the lossy and round-trip edges.
-- `packages/client/ui-model-selection/tests/model-select.client.spec.tsx` — the `.modelMeta` line renders context and price for a model that has them and is absent for one that does not.
+- `packages/llm/llm-pi-ai/tests/account.spec.ts` — `openRouterAccountBalance` reads `limit_remaining`/`usage`, returns `undefined` for a non-OpenRouter or keyless route without calling `fetch`, and throws `ACCOUNT_QUERY_FAILED` / `ABORTED` on a 401 / abort.
+- `packages/api/session-controller/tests/session-models.host.spec.ts` — `buildModelCatalog` carries `contextWindow` and `pricing` onto the wire model and omits both when the adapter resolved neither; a resolved `account` rides its group, a throwing balance query still yields a full group, and a provider with no balance query carries no `account`.
+- `packages/client/ui-model-selection/tests/format.spec.ts` — the four formatters, including the lossy and round-trip edges.
+- `packages/client/ui-model-selection/tests/model-select.client.spec.tsx` — the `.modelMeta` line renders context and price for a model that has them and is absent for one that does not; the group header shows the account balance when the catalog resolved one.

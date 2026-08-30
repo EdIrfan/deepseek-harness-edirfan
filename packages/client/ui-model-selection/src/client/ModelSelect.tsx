@@ -23,7 +23,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
-import { formatPricePair, formatTokenCount } from './format.ts'
+import { formatPricePair, formatTokenCount, formatUsd } from './format.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
@@ -285,7 +285,14 @@ export function ModelSelect(
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
+                      <div className={css.groupTitle} id={headingId}>
+                        <span className={css.groupName}>{group.name}</span>
+                        {group.account?.balanceUsd !== undefined && (
+                          <span className={css.groupCredits}>
+                            {t('group.credits', { amount: formatUsd(group.account.balanceUsd) })}
+                          </span>
+                        )}
+                      </div>
                       {group.models.map((model) => {
                         const selected = state.current?.provider === group.id && state.current.model === model.id
                         const meta = [

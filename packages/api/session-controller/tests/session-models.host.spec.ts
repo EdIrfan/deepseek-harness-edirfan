@@ -5,7 +5,7 @@
  * boundary for a running selection change.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -20,7 +20,7 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import { ApiSessionAgentController } from '../src/agent.ts'
-import { buildModelCatalog } from '../src/catalog.ts'
+import { buildModelCatalog, resetAccountCacheForTests } from '../src/catalog.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { TypertRemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import { createSessionTestRemote } from './test-remote.ts'
@@ -164,6 +164,10 @@ function currentSelection(ctx: Context, sessionId: SessionId) {
   return ctx.sessionProjections.snapshot(session).values.modelSelection?.next
     ?? ctx.agentDefaultModel.currentSelection()
 }
+
+beforeEach(() => {
+  resetAccountCacheForTests()
+})
 
 describe('Web session model selection', () => {
   it('validates an ordered image batch before persisting any member', async () => {
@@ -360,6 +364,16 @@ describe('Web session model selection', () => {
     ], undefined, undefined, undefined, {
       inputPerMTok: 0.27, outputPerMTok: 1.1, cacheReadPerMTok: 0.027, cacheWritePerMTok: 0.3375,
     }))
+    ctx.llm.registerAdapter(['billed'], new class extends CatalogAdapter {
+      override providerAccountBalance(): Promise<{ balanceUsd: number }> {
+        return Promise.resolve({ balanceUsd: 12.4 })
+      }
+    }('Billed', [{ provider: 'billed', id: 'billed-model', name: 'Billed Model' }]))
+    ctx.llm.registerAdapter(['balance-broken'], new class extends CatalogAdapter {
+      override providerAccountBalance(): Promise<never> {
+        return Promise.reject(new Error('balance endpoint offline'))
+      }
+    }('Balance Broken', [{ provider: 'balance-broken', id: 'bb-model', name: 'BB Model' }]))
     ctx.llm.registerAdapter(['string-failure'], new class extends CatalogAdapter {
       override listModels(): Promise<readonly LlmModelInfo[]> {
         // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error provider normalization is the scenario.
@@ -405,6 +419,19 @@ describe('Web session model selection', () => {
     expect(catalog.failures).toContainEqual({
       id: 'string-failure', name: 'String Failure', message: 'string catalog failure',
     })
+    // A resolved balance rides its provider group; a throwing balance query is
+    // cosmetic and still yields a full group.
+    expect(catalog.groups).toContainEqual({
+      id: 'billed', name: 'Billed',
+      models: [{ id: 'billed-model', name: 'Billed Model' }],
+      account: { balanceUsd: 12.4 },
+    })
+    expect(catalog.groups).toContainEqual({
+      id: 'balance-broken', name: 'Balance Broken',
+      models: [{ id: 'bb-model', name: 'BB Model' }],
+    })
+    // A provider whose adapter has no balance query carries no `account`.
+    expect(catalog.groups.find(group => group.id === 'plain')).not.toHaveProperty('account')
     await ctx.fiber.dispose()
   })
 

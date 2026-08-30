@@ -51,3 +51,15 @@ export function formatPricePerMTok(perMTok: number): string {
 export function formatPricePair(inputPerMTok: number, outputPerMTok: number): string {
   return `${formatPricePerMTok(inputPerMTok)} / ${formatPricePerMTok(outputPerMTok)}`
 }
+
+/**
+ * Render a dollar amount for a provider-account balance: `$12.40`, `$1,240.00`
+ * with grouping above a thousand, `< $0.01` for a tiny positive, `$0` for zero.
+ * @param usd - a non-negative dollar amount.
+ * @returns the display string.
+ */
+export function formatUsd(usd: number): string {
+  if (usd === 0) return '$0'
+  if (usd < 0.01) return '< $0.01'
+  return `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}

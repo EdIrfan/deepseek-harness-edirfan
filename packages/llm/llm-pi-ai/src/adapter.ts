@@ -50,6 +50,7 @@ import type {
   ImageAttachmentAccess,
   LlmModelInfo,
   LlmModelPricing,
+  LlmProviderAccountBalance,
   LlmProviderInfo,
   LlmResolvedModelInfo,
   PreparedAdapterCall,
@@ -59,6 +60,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { openRouterAccountBalance } from './account.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
@@ -313,6 +315,22 @@ export class PiAiAdapter extends LlmAdapter {
     return Promise.resolve().then(() => {
       const snapshot = this.current()
       return this.modelInfo(snapshot, provider, model)
+    })
+  }
+
+  override providerAccountBalance(
+    provider: string,
+    signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined> {
+    const snapshot = this.current()
+    const profile = this.profileOf(snapshot, provider)
+    // The route's endpoint: a profile override, else the first catalog model's
+    // own `baseUrl`. Every model on one route shares it.
+    const baseURL = profile.baseURL ?? snapshot.models.getModels(provider)[0]?.baseUrl
+    return openRouterAccountBalance({
+      baseURL,
+      signal,
+      resolveKey: () => this.config.resolveApiKey(provider, profile),
     })
   }
 

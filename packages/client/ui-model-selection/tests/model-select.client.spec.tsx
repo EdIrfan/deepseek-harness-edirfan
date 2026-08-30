@@ -252,4 +252,31 @@ describe('ModelSelect reasoning effort', () => {
     expect(plain).not.toContain('上下文')
     expect(plain).not.toContain('$')
   })
+
+  it('shows the provider account balance in the group header when the catalog resolved one', () => {
+    const directory = createSnapshotStore(state({
+      groups: [
+        {
+          id: 'openrouter',
+          name: 'OpenRouter',
+          account: { balanceUsd: 12.4 },
+          models: [{ id: 'a', name: 'Model A' }],
+        },
+        { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'b', name: 'Model B' }] },
+      ],
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    expect(screen.getByRole('group', { name: /OpenRouter/ }).textContent).toContain('$12.40 剩余')
+    expect(screen.getByRole('group', { name: /DeepSeek/ }).textContent).not.toContain('剩余')
+  })
 })

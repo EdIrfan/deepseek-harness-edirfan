@@ -1100,6 +1100,22 @@ describe('LlmRuntime', () => {
       .rejects.toMatchObject({ code: 'INVALID_MODEL_PRICING' })
   })
 
+  it('delegates providerAccountBalance to the adapter and returns undefined when unimplemented or unregistered', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const balance = { balanceUsd: 12.4, usageUsd: 3.1 }
+    ctx.llm.registerAdapter(['billed'], new class extends ScriptedAdapter {
+      override providerAccountBalance(): Promise<typeof balance> {
+        return Promise.resolve(balance)
+      }
+    }(SCRIPT))
+    ctx.llm.registerAdapter(['plain'], new ScriptedAdapter(SCRIPT))
+
+    await expect(ctx.llm.providerAccountBalance('billed', AbortSignal.timeout(1_000))).resolves.toEqual(balance)
+    await expect(ctx.llm.providerAccountBalance('plain', AbortSignal.timeout(1_000))).resolves.toBeUndefined()
+    await expect(ctx.llm.providerAccountBalance('missing', AbortSignal.timeout(1_000))).resolves.toBeUndefined()
+  })
+
   it.each([
     [{ id: 1, name: 'Name' }, 'non-string id'],
     [{ id: 'other', name: 'Name' }, 'mismatched id'],

@@ -330,6 +330,19 @@ export interface LlmReasoningEffortInfo {
   description?: string
 }
 
+/**
+ * Live account state for one provider route whose provider bills a prepaid
+ * balance (e.g. OpenRouter). All amounts are US dollars. A route whose provider
+ * has no such concept, or whose adapter cannot resolve it, is reported as
+ * `undefined` rather than a zeroed object. Display metadata only.
+ */
+export interface LlmProviderAccountBalance {
+  /** Spendable balance remaining, when the provider reports a cap. Absent for an uncapped key. */
+  readonly balanceUsd?: number
+  /** Cumulative spend on this key, when the provider reports it. */
+  readonly usageUsd?: number
+}
+
 /** Selectable reasoning efforts for one exact provider/model route. */
 export interface LlmModelReasoningInfo {
   /** Supported efforts in adapter-preferred display order. */

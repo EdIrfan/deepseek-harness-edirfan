@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { formatPricePair, formatPricePerMTok, formatTokenCount } from '../src/client/format.ts'
+import {
+  formatPricePair, formatPricePerMTok, formatTokenCount, formatUsd,
+} from '../src/client/format.ts'
 
 describe('formatTokenCount', () => {
   it('renders sub-thousand counts unchanged', () => {
@@ -46,5 +48,18 @@ describe('formatPricePair', () => {
   it('joins input and output prices with a slash', () => {
     expect(formatPricePair(0.14, 0.28)).toBe('$0.14 / $0.28')
     expect(formatPricePair(0.27, 1.1)).toBe('$0.27 / $1.10')
+  })
+})
+
+describe('formatUsd', () => {
+  it('renders a balance with two decimals and thousands grouping', () => {
+    expect(formatUsd(12.4)).toBe('$12.40')
+    expect(formatUsd(1240)).toBe('$1,240.00')
+    expect(formatUsd(0.03)).toBe('$0.03')
+  })
+
+  it('collapses zero and sub-cent amounts', () => {
+    expect(formatUsd(0)).toBe('$0')
+    expect(formatUsd(0.004)).toBe('< $0.01')
   })
 })

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-30-model-picker-metadata-and-cost-visibility.md
-2026-08-30-model-picker-metadata-and-cost-visibility.md: 31a864129cb2ede30f9640bc103b3a2c6deaa1b8
-2026-08-30-model-picker-metadata-and-cost-visibility.zh.md: a5f9910d4918ccede27232de66e6a0a5b1e1dc19
+2026-08-30-model-picker-metadata-and-cost-visibility.md: f8ca3cb853ee42c19009e75b9d944b811f623e5e
+2026-08-30-model-picker-metadata-and-cost-visibility.zh.md: ac9bc4d76929f4f9b6708b1715b262b3cacacbb4

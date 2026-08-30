@@ -98,6 +98,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 已安装目录中的模型会带着目录的每 token 价格费率（每百万 token 美元）一起解析，呈现在 LLM 服务已解析模型信息的 `pricing` 上；手工声明路由没有价格，解析不出。费率原样透传——pi-ai 的 `cost` 单位就是本接缝的单位——价格分层被压平为基础费率。定价仅为展示用元数据。
 
+端点 host 为 `openrouter.ai` 的路由，`ctx.llm.providerAccountBalance` 会用与请求相同的已解析凭据从 OpenRouter 的 `GET /api/v1/key`（该密钥的剩余余额与累计花费）作答。其他路由一律作答 `undefined`。这次查询本身不按 token 计费。非 2xx 回复或网络故障抛出 `ACCOUNT_QUERY_FAILED`；中止抛出 `ABORTED`。
+
 ### 带推理与协议兼容运行
 
 `reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是该等级过线的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。

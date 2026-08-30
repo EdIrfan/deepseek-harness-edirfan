@@ -148,12 +148,30 @@
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   padding: 5px 8px 3px;
   background: var(--dsw-specific-menu);
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
+}
+
+.groupName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Provider account balance (e.g. OpenRouter credits) beside the group name. */
+.groupCredits {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
+  font-weight: 400;
 }
 
 .option {

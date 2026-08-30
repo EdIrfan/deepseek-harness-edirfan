@@ -18,6 +18,7 @@ import type {
   LlmModelDiscoveryRequest,
   LlmModelInfo,
   LlmModelPricing,
+  LlmProviderAccountBalance,
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
@@ -222,6 +223,20 @@ export abstract class LlmAdapter {
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined {
     return undefined
   }
+
+  /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (e.g. OpenRouter). Optional: the default resolves nothing. Return
+   * `undefined` for "not applicable"; throw only for a real network or auth
+   * failure. Must honor `_signal`.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @param _signal - caller lifetime.
+   * @returns the balance, or `undefined` when the route has no billed account.
+   */
+  providerAccountBalance?(
+    _provider: string,
+    _signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined>
 
   /**
    * List models this adapter can currently advertise for one owned provider.
@@ -658,6 +673,23 @@ export class LlmRuntime extends TypertRemoteService {
    */
   imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined {
     return this.adapters.get(provider)?.adapter.imageRequestPricing(provider, model)
+  }
+
+  /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (see {@link LlmAdapter.providerAccountBalance}). An unregistered
+   * route, or one whose adapter does not implement the query, resolves to
+   * `undefined`.
+   * @param provider - a registered provider route.
+   * @param signal - caller lifetime; abort ends the query.
+   * @returns the balance, or `undefined` when unavailable.
+   */
+  async providerAccountBalance(
+    provider: string,
+    signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined> {
+    const adapter = this.adapters.get(provider)?.adapter
+    return adapter?.providerAccountBalance?.(provider, signal)
   }
 
   /** Detach typed adapter-owned modality metadata. */

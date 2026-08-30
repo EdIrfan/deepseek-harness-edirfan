@@ -791,6 +791,19 @@ declare abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
   /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (e.g. OpenRouter). Optional: the default resolves nothing. Return
+   * `undefined` for "not applicable"; throw only for a real network or auth
+   * failure. Must honor `_signal`.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @param _signal - caller lifetime.
+   * @returns the balance, or `undefined` when the route has no billed account.
+   */
+  providerAccountBalance?(
+    _provider: string,
+    _signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined>;
+  /**
    * List models this adapter can currently advertise for one owned provider.
    * The result is advisory: an adapter may accept unlisted model ids, and
    * consumers must not turn absence into request rejection.
