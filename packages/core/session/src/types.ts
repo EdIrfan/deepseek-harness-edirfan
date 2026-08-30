@@ -311,8 +311,9 @@ export interface SessionEventMap {
     startsSeries?: true
   }
   /**
-   * Route metadata for the next request, logged only when the route or capacity
-   * changes. It does not participate in request reconstruction or header equality.
+   * Route metadata for the next request, logged at each turn's first request and
+   * again mid-turn when the route, capacity, or price rates change. It does not
+   * participate in request reconstruction or header equality.
    */
   'request/context': RequestContext
   /**

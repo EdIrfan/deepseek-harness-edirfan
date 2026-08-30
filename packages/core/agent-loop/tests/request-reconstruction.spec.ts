@@ -757,7 +757,7 @@ describe('request/context capacity records', () => {
     }(script)
   }
 
-  it('records capacity once and skips it while the route is unchanged', async () => {
+  it('re-anchors capacity each turn while the route is unchanged, skipping later steps', async () => {
     const adapter = capacityAdapter({ mock: 128_000 }, [textResponse('a'), textResponse('b')])
     const ctx = await harness(adapter)
     const agent = ctx.agentLoop.create(SessionId('capacity-dedup'), { provider: 'mock', model: 'mock' })
@@ -767,16 +767,21 @@ describe('request/context capacity records', () => {
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
+    // One record per turn's first request so a turn-local reader sees the route
+    // without replaying earlier turns; further steps in a turn add none.
     const records = agent.session.events.filter(event => event.type === 'request/context')
-    expect(records).toHaveLength(1)
-    expect(records[0]?.data).toEqual({ provider: 'mock', model: 'mock', contextWindow: 128_000 })
+    expect(records).toHaveLength(2)
+    expect(records.map(record => record.data)).toEqual([
+      { provider: 'mock', model: 'mock', contextWindow: 128_000 },
+      { provider: 'mock', model: 'mock', contextWindow: 128_000 },
+    ])
     // Log-only: not a SurfaceEventType, so it can never reach a model request
     // (the type system rejects a surfaceOp here; the session invariant also
     // requires the record to sit inside its open turn).
     expect(agent.session.surface.nodes).not.toContain(records[0]?.seq)
   })
 
-  it('records adapter-resolved price rates on request/context and re-logs on a rate change', async () => {
+  it('carries adapter-resolved price rates on each turn-anchored request/context and drops them on a rate change', async () => {
     const rates = {
       inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.014, cacheWritePerMTok: 0,
     }
@@ -806,6 +811,7 @@ describe('request/context capacity records', () => {
       .filter(event => event.type === 'request/context')
       .map(event => event.data)).toEqual([
       { provider: 'mock', model: 'mock', pricing: rates },
+      { provider: 'mock', model: 'mock', pricing: rates },
       { provider: 'mock', model: 'mock' },
     ])
   })
@@ -831,7 +837,7 @@ describe('request/context capacity records', () => {
       .map(event => event.data.contextWindow)).toEqual([64_000, 256_000])
   })
 
-  it('records and deduplicates a route whose adapter advertises no capacity', async () => {
+  it('re-anchors each turn for a route whose adapter advertises no capacity', async () => {
     const ctx = await harness(new MockAdapter([textResponse('a'), textResponse('b')]))
     const agent = ctx.agentLoop.create(SessionId('capacity-absent'), { provider: 'mock', model: 'mock' })
     send(agent, 'first')
@@ -840,7 +846,10 @@ describe('request/context capacity records', () => {
     await waitForIdle(ctx, agent)
     expect(agent.session.events
       .filter(event => event.type === 'request/context')
-      .map(event => event.data)).toEqual([{ provider: 'mock', model: 'mock' }])
+      .map(event => event.data)).toEqual([
+      { provider: 'mock', model: 'mock' },
+      { provider: 'mock', model: 'mock' },
+    ])
   })
 
   it('clears a previous capacity when the next route advertises none', async () => {

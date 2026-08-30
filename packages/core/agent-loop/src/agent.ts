@@ -94,6 +94,8 @@ export class ReactLoopAgent implements Agent {
   private requestHeaderLogged = false
   /** Surface generation of the preceding built request. */
   private requestSurfaceGeneration: number | undefined
+  /** Turn of the last appended `request/context`, so each turn re-anchors its route for turn-local readers. */
+  private lastRequestContextTurn: number | undefined
   private readonly runtimeContext: RuntimeContextProjection
 
   constructor(
@@ -544,11 +546,16 @@ export class ReactLoopAgent implements Agent {
       },
     }
     const previousContext = session.requestContext()
-    if (previousContext?.provider !== requestContext.provider
+    const contextChanged = previousContext?.provider !== requestContext.provider
       || previousContext.model !== requestContext.model
       || previousContext.contextWindow !== requestContext.contextWindow
-      || !pricingEqual(previousContext.pricing, requestContext.pricing)) {
+      || !pricingEqual(previousContext.pricing, requestContext.pricing)
+    // Re-anchor once per turn even when unchanged: a turn-local reader folding
+    // only its own events (the completed-Turn usage disclosure) must see the
+    // route and its price rates without replaying earlier turns.
+    if (contextChanged || this.lastRequestContextTurn !== turn) {
       session.append('request/context', requestContext)
+      this.lastRequestContextTurn = turn
     }
     signal.throwIfAborted()
 

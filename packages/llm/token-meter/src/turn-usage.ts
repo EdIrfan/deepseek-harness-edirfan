@@ -216,7 +216,8 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
   let state: AttemptState = { kind: 'idle' }
   const attempts: NormalizedAttempt[] = []
   // Last-wins price per route from this turn's `request/context` events; the
-  // agent loop appends one before each attempt runs.
+  // agent loop re-anchors one at each turn's first request, so a completed turn
+  // always carries its own route record.
   const pricingByRoute = new Map<string, RequestContextPricing>()
   let turn: number | undefined
   let sawEnd = false
