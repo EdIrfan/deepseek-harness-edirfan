@@ -207,6 +207,17 @@
   white-space: nowrap;
 }
 
+/* Secondary metadata line under the model name (context window; price and
+   credits arrive with later plans). Caption tone, matching .groupTitle. */
+.modelMeta {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .check {
   display: grid;
   place-items: center;

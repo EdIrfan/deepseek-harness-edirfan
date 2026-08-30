@@ -26,6 +26,7 @@ import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import { ModelSelect } from './ModelSelect.tsx'
+import { formatPricePair, formatTokenCount } from './format.ts'
 import { en, zh, type ModelKey } from './locales.ts'
 
 export { ModelDirectory } from './directory.ts'
@@ -51,10 +52,19 @@ function optionsOf(directory: ModelDirectoryState, t: TranslateNS<'model'>): Sel
   const rows: SelectOption[] = []
   for (const group of directory.groups) {
     for (const model of group.models) {
+      const detail = [model.description !== undefined ? `${group.name} · ${model.description}` : group.name]
+      if (model.contextWindow !== undefined) {
+        detail.push(t('meta.context', { size: formatTokenCount(model.contextWindow) }))
+      }
+      if (model.pricing !== undefined) {
+        detail.push(t('meta.price', {
+          pair: formatPricePair(model.pricing.inputPerMTok, model.pricing.outputPerMTok),
+        }))
+      }
       rows.push({
         id: rowId(group.id, model.id),
         label: model.name,
-        detail: model.description !== undefined ? `${group.name} · ${model.description}` : group.name,
+        detail: detail.join(' · '),
         ...(directory.current !== null
           && directory.current.provider === group.id
           && directory.current.model === model.id

@@ -301,6 +301,25 @@ export interface LlmModelContext {
   contextWindow: number
 }
 
+/**
+ * Provider-published price rates for one exact model route, in US dollars per
+ * one million tokens (the unit prices are quoted in, e.g. `0.14` for
+ * $0.14 / MTok). Every rate is finite and non-negative. An adapter that cannot
+ * resolve prices omits the whole structure; an adapter that knows a route to be
+ * free reports all-zero rates. Presentation and cost-estimate metadata only —
+ * never part of a model request. Volume tiers are flattened to the base rates.
+ */
+export interface LlmModelPricing {
+  /** USD per million uncached input tokens. */
+  readonly inputPerMTok: number
+  /** USD per million output tokens. */
+  readonly outputPerMTok: number
+  /** USD per million cached-read input tokens. */
+  readonly cacheReadPerMTok: number
+  /** USD per million cache-write input tokens. */
+  readonly cacheWritePerMTok: number
+}
+
 /** Display metadata for one adapter-owned reasoning effort. */
 export interface LlmReasoningEffortInfo {
   /** Opaque stable value accepted by {@link GenerateOptions.reasoningEffort}. */
@@ -330,6 +349,8 @@ export interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /** Provider-published price rates (USD per million tokens) when the adapter resolved them. */
+  pricing?: LlmModelPricing
 }
 
 /**

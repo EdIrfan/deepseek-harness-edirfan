@@ -1061,6 +1061,45 @@ describe('LlmRuntime', () => {
     },
   )
 
+  it('passes adapter-resolved per-token pricing through unchanged', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const pricing = {
+      inputPerMTok: 0.27,
+      outputPerMTok: 1.1,
+      cacheReadPerMTok: 0.027,
+      cacheWritePerMTok: 0.3375,
+    }
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, pricing })
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).resolves.toEqual({
+      provider: 'route', id: 'model', name: 'model', pricing,
+    })
+  })
+
+  it.each([
+    ['negative rate', { inputPerMTok: -0.1, outputPerMTok: 0, cacheReadPerMTok: 0, cacheWritePerMTok: 0 }],
+    ['non-finite rate', { inputPerMTok: 0.1, outputPerMTok: Number.POSITIVE_INFINITY, cacheReadPerMTok: 0, cacheWritePerMTok: 0 }],
+    ['NaN rate', { inputPerMTok: Number.NaN, outputPerMTok: 0, cacheReadPerMTok: 0, cacheWritePerMTok: 0 }],
+  ] as const)('rejects invalid adapter pricing (%s)', async (_label, pricing) => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, pricing })
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.resolveModelInfo('route', 'model'))
+      .rejects.toMatchObject({ code: 'INVALID_MODEL_PRICING' })
+  })
+
   it.each([
     [{ id: 1, name: 'Name' }, 'non-string id'],
     [{ id: 'other', name: 'Name' }, 'mismatched id'],

@@ -40,6 +40,17 @@ export async function buildModelCatalog(
           name: model.name,
           ...(model.description === undefined ? {} : { description: model.description }),
           ...(reasoning === undefined ? {} : { reasoning }),
+          ...(resolved.context?.contextWindow === undefined
+            ? {}
+            : { contextWindow: resolved.context.contextWindow }),
+          ...(resolved.pricing === undefined ? {} : {
+            pricing: {
+              inputPerMTok: resolved.pricing.inputPerMTok,
+              outputPerMTok: resolved.pricing.outputPerMTok,
+              cacheReadPerMTok: resolved.pricing.cacheReadPerMTok,
+              cacheWritePerMTok: resolved.pricing.cacheWritePerMTok,
+            },
+          }),
         }
       }))
       return {

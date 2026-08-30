@@ -113,12 +113,24 @@ export interface ModelReasoning {
   readonly defaultEffort?: string
 }
 
+/** Price rates in USD per million tokens for one catalog model, when the adapter resolved them. */
+export interface ModelPricing {
+  readonly inputPerMTok: number
+  readonly outputPerMTok: number
+  readonly cacheReadPerMTok: number
+  readonly cacheWritePerMTok: number
+}
+
 /** One model displayed inside its provider group. */
 export interface ModelCatalogModel {
   readonly id: string
   readonly name: string
   readonly description?: string
   readonly reasoning?: ModelReasoning
+  /** Maximum combined request and response context in tokens, when the adapter resolved one. */
+  readonly contextWindow?: number
+  /** Provider-published price rates (USD per million tokens), when the adapter resolved them. */
+  readonly pricing?: ModelPricing
 }
 
 /** One provider and its successfully loaded model catalog. */

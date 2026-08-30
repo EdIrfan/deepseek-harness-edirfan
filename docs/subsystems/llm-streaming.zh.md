@@ -557,6 +557,8 @@ interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /** Provider-published price rates (USD per million tokens) when the adapter resolved them. */
+  pricing?: LlmModelPricing
 }
 ```
 

@@ -12,8 +12,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
-  GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
-  LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
+  GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelContext, LlmModelInfo,
+  LlmModelPricing, LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -45,6 +45,8 @@ class CatalogAdapter extends LlmAdapter {
     private readonly models: readonly LlmModelInfo[] | Error,
     private readonly reasoning?: LlmModelReasoningInfo,
     private readonly exactError?: Error,
+    private readonly context?: LlmModelContext,
+    private readonly pricing?: LlmModelPricing,
   ) {
     super()
   }
@@ -66,6 +68,8 @@ class CatalogAdapter extends LlmAdapter {
       id: model,
       name: model,
       ...this.reasoning === undefined ? {} : { reasoning: this.reasoning },
+      ...this.context === undefined ? {} : { context: this.context },
+      ...this.pricing === undefined ? {} : { pricing: this.pricing },
     })
   }
 
@@ -348,6 +352,14 @@ describe('Web session model selection', () => {
     ], {
       efforts: [{ id: ReasoningEffortId('high'), name: 'High', description: 'More thinking' }],
     }))
+    ctx.llm.registerAdapter(['sized'], new CatalogAdapter('Sized', [
+      { provider: 'sized', id: 'sized-model', name: 'Sized Model' },
+    ], undefined, undefined, { contextWindow: 262144 }))
+    ctx.llm.registerAdapter(['priced'], new CatalogAdapter('Priced', [
+      { provider: 'priced', id: 'priced-model', name: 'Priced Model' },
+    ], undefined, undefined, undefined, {
+      inputPerMTok: 0.27, outputPerMTok: 1.1, cacheReadPerMTok: 0.027, cacheWritePerMTok: 0.3375,
+    }))
     ctx.llm.registerAdapter(['string-failure'], new class extends CatalogAdapter {
       override listModels(): Promise<readonly LlmModelInfo[]> {
         // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error provider normalization is the scenario.
@@ -370,6 +382,22 @@ describe('Web session model selection', () => {
           name: 'Reasoning Model',
           reasoning: {
             efforts: [{ id: 'high', name: 'High', description: 'More thinking' }],
+          },
+        }],
+      },
+      {
+        id: 'sized',
+        name: 'Sized',
+        models: [{ id: 'sized-model', name: 'Sized Model', contextWindow: 262144 }],
+      },
+      {
+        id: 'priced',
+        name: 'Priced',
+        models: [{
+          id: 'priced-model',
+          name: 'Priced Model',
+          pricing: {
+            inputPerMTok: 0.27, outputPerMTok: 1.1, cacheReadPerMTok: 0.027, cacheWritePerMTok: 0.3375,
           },
         }],
       },

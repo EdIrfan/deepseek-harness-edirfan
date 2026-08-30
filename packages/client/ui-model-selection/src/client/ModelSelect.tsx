@@ -23,6 +23,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
+import { formatPricePair, formatTokenCount } from './format.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
@@ -287,6 +288,16 @@ export function ModelSelect(
                       <div className={css.groupTitle} id={headingId}>{group.name}</div>
                       {group.models.map((model) => {
                         const selected = state.current?.provider === group.id && state.current.model === model.id
+                        const meta = [
+                          ...model.contextWindow === undefined
+                            ? []
+                            : [t('meta.context', { size: formatTokenCount(model.contextWindow) })],
+                          ...model.pricing === undefined
+                            ? []
+                            : [t('meta.price', {
+                              pair: formatPricePair(model.pricing.inputPerMTok, model.pricing.outputPerMTok),
+                            })],
+                        ]
                         return (
                           <button
                             ref={itemRef()}
@@ -301,6 +312,9 @@ export function ModelSelect(
                           >
                             <span className={css.optionCopy}>
                               <span className={css.modelName}>{model.name}</span>
+                              {meta.length > 0 && (
+                                <span className={css.modelMeta}>{meta.join(' · ')}</span>
+                              )}
                             </span>
                             <span className={css.check}>
                               {selected ? <IconCheckOutline16 /> : null}

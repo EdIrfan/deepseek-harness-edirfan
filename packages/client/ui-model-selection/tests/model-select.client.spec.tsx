@@ -214,4 +214,42 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('button')).toBeNull()
     expect(load).not.toHaveBeenCalled()
   })
+
+  it('shows the context window and price under a model that resolved them, and nothing under one that did not', () => {
+    const directory = createSnapshotStore(state({
+      current: { provider: 'deepseek-official', model: 'sized' },
+      groups: [{
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [
+          {
+            id: 'sized',
+            name: 'Sized Model',
+            contextWindow: 200000,
+            pricing: {
+              inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.0028, cacheWritePerMTok: 0,
+            },
+          },
+          { id: 'plain', name: 'Plain Model' },
+        ],
+      }],
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    const sized = screen.getByRole('menuitemradio', { name: /Sized Model/ }).textContent ?? ''
+    expect(sized).toContain('200K 上下文')
+    expect(sized).toContain('$0.14 / $0.28')
+    const plain = screen.getByRole('menuitemradio', { name: /Plain Model/ }).textContent ?? ''
+    expect(plain).not.toContain('上下文')
+    expect(plain).not.toContain('$')
+  })
 })

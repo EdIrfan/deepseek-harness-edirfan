@@ -17,6 +17,7 @@ import type {
   LlmModelContext,
   LlmModelDiscoveryRequest,
   LlmModelInfo,
+  LlmModelPricing,
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
@@ -764,6 +765,7 @@ export class LlmRuntime extends TypertRemoteService {
         'INVALID_MODEL_MAX_TOKENS',
       )
     }
+    const pricing = normalizePricing(resolved.pricing, provider, model)
     const info: LlmResolvedModelInfo = {
       provider,
       id: model,
@@ -772,6 +774,7 @@ export class LlmRuntime extends TypertRemoteService {
       ...inputModalities === undefined ? {} : { inputModalities },
       ...context === undefined ? {} : { context: { contextWindow: context.contextWindow } },
       ...defaultMaxTokens === undefined ? {} : { defaultMaxTokens },
+      ...pricing === undefined ? {} : { pricing },
     }
     const reasoning = resolved.reasoning
     if (reasoning === undefined) return info
@@ -1061,6 +1064,41 @@ export class LlmRuntime extends TypertRemoteService {
       options,
       () => this.adapterStream(options, prepared),
     )
+  }
+}
+
+/**
+ * Validate an adapter-resolved price structure at the adapter-result boundary.
+ * Every rate must be a finite non-negative number; a violation is an adapter
+ * fault, not caller input.
+ * @param pricing - the adapter's resolved rates, when it supplied any.
+ * @param provider - the registered provider route, for the diagnostic.
+ * @param model - the exact model id, for the diagnostic.
+ * @returns a detached copy of the four rates, or `undefined` when none was supplied.
+ */
+function normalizePricing(
+  pricing: LlmModelPricing | undefined,
+  provider: string,
+  model: string,
+): LlmModelPricing | undefined {
+  if (pricing === undefined) return undefined
+  const rates = [
+    pricing.inputPerMTok, pricing.outputPerMTok,
+    pricing.cacheReadPerMTok, pricing.cacheWritePerMTok,
+  ]
+  for (const rate of rates) {
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) {
+      throw new LlmError(
+        `adapter returned invalid price metadata for provider "${provider}" model "${model}"`,
+        'INVALID_MODEL_PRICING',
+      )
+    }
+  }
+  return {
+    inputPerMTok: pricing.inputPerMTok,
+    outputPerMTok: pricing.outputPerMTok,
+    cacheReadPerMTok: pricing.cacheReadPerMTok,
+    cacheWritePerMTok: pricing.cacheWritePerMTok,
   }
 }
 
