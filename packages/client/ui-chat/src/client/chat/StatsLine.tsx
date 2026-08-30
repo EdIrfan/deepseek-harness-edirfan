@@ -13,7 +13,7 @@ import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
-import { formatCacheHitPercent, formatTokens } from './token-format.ts'
+import { formatCacheHitPercent, formatTokens, formatUsd } from './token-format.ts'
 import css from './StatsLine.module.css'
 
 interface WindowStats {
@@ -164,6 +164,9 @@ export const StatsLine = memo(function StatsLine({ useChat, useProjection, t }: 
       input: formatTokens(billedInputTokens(usage), t),
       output: formatTokens(usage.outputTokens, t),
     }))
+    if (usage.costUsd !== undefined) {
+      groups.push(t('stats.costEstimate', { amount: formatUsd(usage.costUsd) }))
+    }
   }
   const line = groups.join(' | ')
   // The row elides with ellipsis when overlong; a delayed hover tooltip carries

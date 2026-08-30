@@ -23,6 +23,8 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 
 **每轮成本行可从日志重建。** `PreparedLlmCall` 新增分离的 `pricing`（在 `LlmService.prepareCall` 里从 `modelInfo.pricing` 填充），agent loop 把它作为 `RequestContextPricing` 写到既有的 `request/context` 事件上、紧挨 `contextWindow`，并经 `pricingEqual` 检查在费率变化时重新记录。该字段是增量的、对既有读者无语义影响，因此 `SESSION_FORMAT_VERSION` 保持 `0`，在此字段之前写入的日志只是得不到估算。token-meter 的 `deriveTurnTokenUsage` 现在从该轮的 `request/context` 事件收集一份按路由的价格映射，并在 `aggregateAttempts` 里经新的纯函数 `costOf(buckets, rates)`（`pricing.ts`）求出 `costUsd`：`Σ (uncachedInput·inRate + cacheRead·crRate + cacheWrite·cwRate + output·outRate) / 1e6`，每次 attempt 按其自身路由的费率计。`costUsd` 仅在每次计费 attempt 都有路由且该路由记录了费率时出现；提供方未上报的缓存桶按零计价，与其他所有 token-meter 折叠一致。`TurnUsageDisclosure` 在 Total 之后渲染一行 `Cost — ≈ $0.0012 (est.)`；`(est.)` 始终显示。**这零模型 token 成本**——token 数是提供方上报且已在日志里的，费率是静态目录元数据。
 
+**整个任务的花费按模型汇总在 stats 条上。** token-meter 的持久 `tokenUsage` session 投影（`stateVersion` 2 → 3，一次预发布重折叠）在只看计数的消费方仍读取的扁平 `totals` 之外，保留一份按路由的累计：每个 `request/context` 设定下一个用量样本归属的路由，并给该路由打上它携带的费率，每个用量样本同时加到 `totals` 与其路由的桶。wire 视图导出 `byRoute`（按提供方/模型的花费，路由记录了费率时各带自己的 `costUsd`）与整会话 `costUsd`，后者仅在每条计费 token 的路由都有费率且没有未归属 token 时出现。`ui-chat` 的 `StatsLine` 在 token 计数之后追加一个 `≈ $X (est.)` 组（当会话 `costUsd` 解析出时）。渲染完整 `byRoute` 表的专门 `/cost` 命令被推迟——stats 条上的组加上投影数据已覆盖「这个任务花了多少」。
+
 **预付余额计费的提供方路由会上报余额，分组标题显示它。** `LlmAdapter` 基类新增可选的 `providerAccountBalance(provider, signal)`；`LlmService.providerAccountBalance` 委托给它，对未注册路由或未实现该查询的适配器回答 `undefined`。pi-ai 适配器只为 OpenRouter 实现：当路由端点 host 为 `openrouter.ai` 时，通过与请求相同的 `resolveApiKey` 解析路由密钥，并经共享的 `readBoundedText` 读取 `GET https://openrouter.ai/api/v1/key`（`limit_remaining` 与 `usage`）；其他 host 一律解析为 `undefined`。`buildModelCatalog` 在 60 秒进程缓存与每次 4 秒超时之下按分组折叠出一个 `ModelProviderGroup.account`，包在 `try/catch` 里——任何失败都当作「无 account」，因为余额只是装饰，分组必须能在没有它时加载。`ui-model-selection` 在 `/model` 弹窗与 composer 模型面板里于分组名旁渲染 `$12.40 left`。OpenRouter 的 `/key` 端点本身不按 token 计费，所以这次查询零成本。
 
 ## Unit choice
@@ -51,6 +53,10 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 
 **要求每次 attempt 都上报缓存桶后才显示 `costUsd`。** 否决。非缓存模型合理地不上报缓存桶；要求它们会让常见情形也没有估算。缺失的桶按零计价，与 `usage-projection.ts` 的 `usage.cacheReadTokens ?? 0` 一致。`(est.)` 标签与 README 承载该注意事项。
 
+**加一个兄弟投影 `tokenSpend` 而非扩展 `tokenUsage`。** 否决。按路由的桶就是 `tokenUsage` 已折叠的同一批数字，只是键不同；第二个投影会为累计一份并行副本而重折叠每个用量事件，`StatsLine` 也要多一个 `useProjection` hook。扩展 state（并在 `stateVersion` 变更时重折叠一次，预发布策略允许）保持一个折叠、一个 hook。
+
+**按 `assistant/message.source` 而非从 `request/context` 设定的 `currentRoute` 归属按路由花费。** 为与已经串起 `request/context` 的每轮折叠（计划 004）保持一致而否决。`source` 在一次在最终化前就出错的 attempt 的仅 chunk 用量样本上也缺失，因此会更常把那些 token 留作未归属。
+
 ## Consequences
 
 - 选择器立即为每条 pi-ai 目录路由（也就是随附 `dsh web` 组合服务的每条路由）显示上下文窗口与价格。手工声明的网关路由显示上下文窗口（来自其配置的或 `defaultContextWindow` 值）且无价格。
@@ -61,6 +67,8 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 - `ACCOUNT_QUERY_FAILED` 是新的 `LlmError` code，在 `account.ts` 内抛出、被 `buildModelCatalog` 吞掉；不会浮现到浏览器。
 - 「本轮用量」面板现在在该轮路由记录了费率时显示估算金额。`request/context` 载荷新增可选的 `pricing` 对象；包含 `request/context` 事件的无密钥快照与两个 SDK 的期望输出都需要重录。该重录需要 `DEEPSEEK_API_KEY`，被推迟；在它运行之前，本 fork 上 `pnpm run test:snapshot` 与 `pnpm run test:expected` 会在受影响的 fixture 上出现 diff。
 - `deriveTurnTokenUsage` 现在会读取其输入切片中的 `request/context` 事件（此前忽略它们）。把它们过滤掉的调用方会失去成本估算，但别的不受影响。
+- 持久 `tokenUsage` 投影的 `stateVersion` 从 2 到 3。预发布策略会重折叠它；没有迁移。它的 wire 视图新增可选的 `costUsd` 与 `byRoute`——断言 `tokenUsage` 视图的 SDK 期望输出需要与 `request/context` 变更相同的带密钥重录。
+- `/cost` 命令被推迟；`plans/005-session-cost-rollup.md`（在会话 scratchpad，不在仓库）里有规格，日后如需可用。
 - 实施环境中没有 `DEEPSEEK_API_KEY`（仅 OpenRouter）；选择器行的 Web e2e 以及任何带密钥的快照重录被推迟。单元、宿主集成与 React 组件测试覆盖了管道与渲染。
 - OpenRouter 余额查询需要真实密钥与网络才能端到端演练；随附测试对 `fetch` 打桩，绝不断言真实密钥值。
 - `resetAccountCacheForTests()` 是 `catalog.ts` 上仅供测试的导出，让一个测试套件第二次 `buildModelCatalog` 重新查询而非复用 60 秒缓存。
@@ -77,3 +85,5 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 - `packages/llm/token-meter/tests/turn-usage.spec.ts` —— 单路由轮次按其记录的费率计价、路由没记录费率时省略 `costUsd`、以及两个步骤在不同定价路由上的按路由求和。
 - `packages/core/agent-loop/tests/request-reconstruction.spec.ts` —— 适配器解析出 `pricing` 时 `request/context` 携带它，并在费率变化时重新记录。
 - `packages/client/ui-chat/tests/turn-usage-disclosure.client.spec.tsx` —— 仅当 `costUsd` 存在时才渲染带 `(est.)` 的 `Cost` 行。
+- `packages/llm/token-meter/tests/token-usage-projection.spec.ts` —— session 投影从记录的费率导出 `costUsd` 与 `byRoute`、保持 `totals` 不变，并在某路由没记录费率时省略会话 `costUsd` 但仍列出该路由。
+- `packages/client/ui-chat/tests/chat-stats.client.spec.tsx` —— 仅当投影解析出 `costUsd` 时 `StatsLine` 才追加估算成本组。

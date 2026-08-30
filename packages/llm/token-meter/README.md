@@ -50,6 +50,8 @@ When the composition provides `ctx.sessionProjections`, token-meter registers th
 
 `deriveTurnTokenUsage(events)` folds one complete Turn into exact per-attempt and total usage for browser consumers. Missing lifecycle evidence, unsafe counts, or contradictory exact totals return no result; optional cache, reasoning, and route aggregates appear only when every contributing attempt reports them. When every billed attempt has a route and that route's `request/context` carried price rates, the fold also emits an estimated `costUsd` — `costOf` (`src/pricing.ts`) multiplies the exact provider-reported token counts by the logged per-million-token rates. The estimate uses provider numbers already in the log and static catalog rates; it costs no model tokens. Cache reads and writes a provider did not report are priced as zero, and the rates are only as fresh as the bundled model catalog, so a consumer labels the figure an estimate.
 
+The durable `tokenUsage` session projection carries the same estimate at session scope. Beside the flat `totals` (unchanged for count-only consumers), its wire view adds `byRoute` — cumulative buckets per provider/model, each with its own `costUsd` when the route logged rates — and a whole-session `costUsd`, present only when every route that billed tokens has rates and no sample landed unattributed. Attribution follows the last `request/context` route.
+
 ### Composition
 
 ```yaml
