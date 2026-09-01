@@ -400,7 +400,7 @@ describe('deriveTurnTokenUsage', () => {
   }
   function context(seq: number, pricing?: unknown, provider = 'deepseek', model = 'deepseek-chat'): SessionEvent {
     return event(seq, 'request/context', {
-      provider, model, ...pricing === undefined ? {} : { pricing },
+      turn: 1, step: 1, provider, model, ...pricing === undefined ? {} : { pricing },
     })
   }
 

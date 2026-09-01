@@ -1523,7 +1523,7 @@ describe('SessionStore', () => {
     const session = ctx.sessions.create(SessionId('reentrant-observer'))
     const heard: SessionEvent[] = []
     ctx.on('session/event', (observedSession) => {
-      observedSession.append('request/context', { provider: 'mock', model: 'mock' })
+      observedSession.append('request/context', { turn: 1, step: 1, provider: 'mock', model: 'mock' })
     })
     ctx.on('session/event', (_observedSession, event) => { heard.push(event) })
 

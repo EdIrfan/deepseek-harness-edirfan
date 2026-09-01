@@ -311,7 +311,7 @@ describe('tokenUsage session projection', () => {
     session: Session, provider: string, model: string, rates?: RequestContextPricing,
   ): void {
     session.append('request/context', {
-      provider, model, ...rates === undefined ? {} : { pricing: rates },
+      turn: 1, step: 1, provider, model, ...rates === undefined ? {} : { pricing: rates },
     })
   }
   function stepUsage(
@@ -375,6 +375,8 @@ const pressure = (ctx: Context, session: Session): ContextPressureProjection => 
 
 function recordContext(session: Session, model: string, contextWindow?: number): void {
   session.append('request/context', {
+    turn: 1,
+    step: 1,
     provider: 'mock',
     model,
     ...contextWindow === undefined ? {} : { contextWindow },

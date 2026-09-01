@@ -202,6 +202,10 @@ export interface RequestContextPricing {
 
 /** Registration-bound metadata for one resolved model route. */
 export interface RequestContext {
+  /** Turn that logged this record; every request/context sits inside its open turn. */
+  turn: number
+  /** Step that logged this record. */
+  step: number
   /** Registered provider route the metadata belongs to. */
   provider: string
   /** Provider-owned model id the metadata belongs to. */

@@ -146,7 +146,7 @@ describe('session-log invariants', () => {
       reason: 'initial',
     } as never)).not.toThrow()
     expect(() => enclosed.append('request/context', {
-      provider: 'mock', model: 'mock',
+      turn: 1, step: 1, provider: 'mock', model: 'mock',
     })).not.toThrow()
 
     const outside = (await setup()).ctx.sessions.create()
@@ -156,6 +156,8 @@ describe('session-log invariants', () => {
     }), { surfaceOp: 'append' })).not.toThrow()
     // Route capacity is core execution state like the header beside it.
     expect(() => outside.append('request/context', {
+      turn: 1,
+      step: 1,
       provider: 'mock',
       model: 'm',
       contextWindow: 128_000,

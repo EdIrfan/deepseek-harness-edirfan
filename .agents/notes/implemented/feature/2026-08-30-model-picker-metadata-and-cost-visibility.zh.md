@@ -21,7 +21,7 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 
 **定价仅用于呈现，绝不进入模型请求。** 选择器面这些界面不新增 session 事件（`packages/client/AGENTS.md`：「只关乎『如何绘制』的东西不进入 session 日志」）。
 
-**每轮成本行可从日志重建。** `PreparedLlmCall` 新增分离的 `pricing`（在 `LlmService.prepareCall` 里从 `modelInfo.pricing` 填充），agent loop 把它作为 `RequestContextPricing` 写到既有的 `request/context` 事件上、紧挨 `contextWindow`。该事件此前仅在路由或容量变化时记录；现在还会在每个轮次的首个请求处重新锚定一次（agent 记录上一次锚定的轮次），这样仅折叠自身事件的轮次局部读取方无需重放更早轮次即可得到路由与费率——与 `request/header` 以 `series` 原因重新记录同理。轮次内它仍只在 `pricingEqual` / 路由 / 容量变化时追加。该字段是增量的、对既有读者无语义影响，因此 `SESSION_FORMAT_VERSION` 保持 `0`，在此字段之前写入的日志只是得不到估算。token-meter 的 `deriveTurnTokenUsage` 现在从该轮的 `request/context` 事件收集一份按路由的价格映射，并在 `aggregateAttempts` 里经新的纯函数 `costOf(buckets, rates)`（`pricing.ts`）求出 `costUsd`：`Σ (uncachedInput·inRate + cacheRead·crRate + cacheWrite·cwRate + output·outRate) / 1e6`，每次 attempt 按其自身路由的费率计。`costUsd` 仅在每次计费 attempt 都有路由且该路由记录了费率时出现；提供方未上报的缓存桶按零计价，与其他所有 token-meter 折叠一致。`TurnUsageDisclosure` 在 Total 之后渲染一行 `Cost — ≈ $0.0012 (est.)`；`(est.)` 始终显示。**这零模型 token 成本**——token 数是提供方上报且已在日志里的，费率是静态目录元数据。
+**每轮成本行可从日志重建。** `PreparedLlmCall` 新增分离的 `pricing`（在 `LlmService.prepareCall` 里从 `modelInfo.pricing` 填充），agent loop 把它作为 `RequestContextPricing` 写到既有的 `request/context` 事件上、紧挨 `contextWindow`。该事件此前仅在路由或容量变化时记录；现在还会在每个轮次的首个请求处重新锚定一次（agent 记录上一次锚定的轮次），这样仅折叠自身事件的轮次局部读取方无需重放更早轮次即可得到路由与费率——与 `request/header` 以 `series` 原因重新记录同理。轮次内它仍只在 `pricingEqual` / 路由 / 容量变化时追加。`RequestContext` 还新增 `turn` 与 `step`——该记录像其他所有执行事件一样携带记录它的坐标，因此 `ui-chat` 的已完成轮次页脚节点（`turn-tail.ts` 里的 `turnCoordinates`）把它认领进该轮的匹配集，`deriveTurnTokenUsage` 便能看到它。`pricing` 是呈现用元数据，`turn`/`step` 是增量的；`SESSION_FORMAT_VERSION` 保持 `0`（预发布，无兼容承诺），在 `pricing` 之前写入的日志只是得不到估算。token-meter 的 `deriveTurnTokenUsage` 现在从该轮的 `request/context` 事件收集一份按路由的价格映射，并在 `aggregateAttempts` 里经新的纯函数 `costOf(buckets, rates)`（`pricing.ts`）求出 `costUsd`：`Σ (uncachedInput·inRate + cacheRead·crRate + cacheWrite·cwRate + output·outRate) / 1e6`，每次 attempt 按其自身路由的费率计。`costUsd` 仅在每次计费 attempt 都有路由且该路由记录了费率时出现；提供方未上报的缓存桶按零计价，与其他所有 token-meter 折叠一致。`TurnUsageDisclosure` 在 Total 之后渲染一行 `Cost — ≈ $0.0012 (est.)`；`(est.)` 始终显示。**这零模型 token 成本**——token 数是提供方上报且已在日志里的，费率是静态目录元数据。
 
 **整个任务的花费按模型汇总在 stats 条上。** token-meter 的持久 `tokenUsage` session 投影（`stateVersion` 2 → 3，一次预发布重折叠）在只看计数的消费方仍读取的扁平 `totals` 之外，保留一份按路由的累计：每个 `request/context` 设定下一个用量样本归属的路由，并给该路由打上它携带的费率，每个用量样本同时加到 `totals` 与其路由的桶。wire 视图导出 `byRoute`（按提供方/模型的花费，路由记录了费率时各带自己的 `costUsd`）与整会话 `costUsd`，后者仅在每条计费 token 的路由都有费率且没有未归属 token 时出现。`ui-chat` 的 `StatsLine` 在 token 计数之后追加一个 `≈ $X (est.)` 组（当会话 `costUsd` 解析出时）。渲染完整 `byRoute` 表的专门 `/cost` 命令被推迟——stats 条上的组加上投影数据已覆盖「这个任务花了多少」。
 
@@ -67,8 +67,9 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 - 分层定价被舍弃。超大请求的成本数字会用基础费率。当某消费方需要分层准确性时，正确做法是一个 `resolvePricing(provider, model, inputTokens)` 方法，而非静态字段。
 - OpenRouter 路由现在在选择器分组标题显示其剩余额度余额。`buildModelCatalog` 每个 OpenRouter 提供方每 60 秒新增一次有界外发请求；4 秒超时与缓存让它不进入目录的关键路径。非 OpenRouter 提供方不发这类请求。
 - `ACCOUNT_QUERY_FAILED` 是新的 `LlmError` code，在 `account.ts` 内抛出、被 `buildModelCatalog` 吞掉；不会浮现到浏览器。
-- 「本轮用量」面板现在在该轮路由记录了费率时显示估算金额。`request/context` 载荷新增可选的 `pricing` 对象，且该事件现在每轮出现一次而非每次变化一次，因此每个含多轮会话的无密钥快照与两个 SDK 的期望输出都会多出 `request/context` 行。`pnpm run test:snapshot:refresh` 可无密钥地重新生成它们（不需要 `DEEPSEEK_API_KEY`），但本 fork 的已提交快照已相对当前 normalizer 陈旧（无关的 seq 区间与 ACP `config_option_update` 漂移），因此一次干净的 refresh 会把那些漂移也一并扫入；该 refresh 推迟到本 fork 的快照基线作为一个受审批次被校准。在此之前，本 fork 上 `pnpm run test:snapshot` 与 `pnpm run test:expected` 会出现 diff。
-- `deriveTurnTokenUsage` 现在会读取其输入切片中的 `request/context` 事件（此前忽略它们）。把它们过滤掉的调用方会失去成本估算，但别的不受影响。
+- 「本轮用量」面板现在在该轮路由记录了费率时显示估算金额。`request/context` 载荷新增 `turn`、`step` 与可选的 `pricing` 对象，且该事件现在每轮出现一次而非每次变化一次，因此每个含多轮会话的无密钥快照与两个 SDK 的期望输出中的 `request/context` 行都会增多并改形。`pnpm run test:snapshot:refresh` 可无密钥地重新生成它们（不需要 `DEEPSEEK_API_KEY`），但本 fork 的已提交快照已相对当前 normalizer 陈旧（无关的 seq 区间与 ACP `config_option_update` 漂移），因此一次干净的 refresh 会把那些漂移也一并扫入；该 refresh 推迟到本 fork 的快照基线作为一个受审批次被校准。在此之前，本 fork 上 `pnpm run test:snapshot` 与 `pnpm run test:expected` 会出现 diff。
+- `deriveTurnTokenUsage` 现在会读取其输入切片中的 `request/context` 事件（此前忽略它们）。`ui-chat` 的 `turnCoordinates` 把该事件映射到它的 `turn`/`step`，使已完成轮次页脚节点认领它；把 `request/context` 过滤掉的调用方会失去成本估算，但别的不受影响。
+- `RequestContext`（`session.requestContext()` 归并出的值）现在携带它来自的记录的 `turn`/`step`。既有调用方读取 `provider`/`model`/`contextWindow`/`pricing`，不受影响。
 - 持久 `tokenUsage` 投影的 `stateVersion` 从 2 到 3。预发布策略会重折叠它；没有迁移。它的 wire 视图新增可选的 `costUsd` 与 `byRoute`——断言 `tokenUsage` 视图的 SDK 期望输出在同一批次里刷新。
 - `/cost` 命令被推迟；`plans/005-session-cost-rollup.md`（在会话 scratchpad，不在仓库）里有规格，日后如需可用。
 - 实施环境中没有 `DEEPSEEK_API_KEY`（仅 OpenRouter）；选择器行的 Web e2e 以及无密钥的快照 refresh（见上）被推迟。单元、宿主集成与 React 组件测试覆盖了管道与渲染。
@@ -87,5 +88,6 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 - `packages/llm/token-meter/tests/turn-usage.spec.ts` —— 单路由轮次按其记录的费率计价、路由没记录费率时省略 `costUsd`、以及两个步骤在不同定价路由上的按路由求和。
 - `packages/core/agent-loop/tests/request-reconstruction.spec.ts` —— `request/context` 每轮重新锚定一次（而非每步），无论有无容量；适配器解析出 `pricing` 时携带它，并在费率变化时丢弃这些费率。
 - `packages/client/ui-chat/tests/turn-usage-disclosure.client.spec.tsx` —— 仅当 `costUsd` 存在时才渲染带 `(est.)` 的 `Cost` 行。
+- `packages/client/ui-chat/tests/conversation-node-definitions.client.spec.ts` —— 已完成轮次页脚节点经真实 assembler 把轮次锚定的 `request/context` 折进 `tokenUsage.costUsd`。
 - `packages/llm/token-meter/tests/token-usage-projection.spec.ts` —— session 投影从记录的费率导出 `costUsd` 与 `byRoute`、保持 `totals` 不变，并在某路由没记录费率时省略会话 `costUsd` 但仍列出该路由。
 - `packages/client/ui-chat/tests/chat-stats.client.spec.tsx` —— 仅当投影解析出 `costUsd` 时 `StatsLine` 才追加估算成本组。

@@ -533,6 +533,8 @@ export class ReactLoopAgent implements Agent {
     const contextWindow = preparedCall?.context?.contextWindow
     const pricing = preparedCall?.pricing
     const requestContext: RequestContext = {
+      turn,
+      step,
       provider: config.provider,
       model: config.model,
       ...contextWindow === undefined ? {} : { contextWindow },

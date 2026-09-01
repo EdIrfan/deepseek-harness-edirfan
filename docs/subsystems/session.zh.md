@@ -162,11 +162,15 @@ interface EpochHeader {
 
 ### 路由容量事件：`request/context`
 
-请求所解析到的路由的上下文元数据是独立的已记录状态，在同一步骤内紧随 `request/header` 追加：每个轮次的首个请求追加一次，轮次内当提供方、模型、容量或价格费率与上一条记录不同时再次追加。每个轮次都重新锚定，可让仅折叠自身事件的轮次局部读取方（已完成轮次的用量披露）无需重放更早的轮次即可得到路由及其价格费率。它保持在 `EpochHeader` 之外，因为该类型是 `headerEquals` 逐字段比较的重建约定。容量描述的是路由，不是请求输入，把它折叠进去会让一次容量变化被登记为请求信封的 `change`，也会把适配器元数据拉进 loop 的重建不变式。与 `request/header` 一样，它不是 `SurfaceEventType`，也不产生 LLM 消息。`session.requestContext()` 以增量方式归并最新一条记录。适配器不公布容量的路由会以缺失 `contextWindow` 的形式记录，因此新记录可以清除较早路由的容量。可选的 `pricing`（每百万 token 美元费率）是呈现与成本估算用的元数据，记录在这里是为了让成本视图仅凭日志即可重建；它绝不进入模型请求，是增量的，也不移动 `SESSION_FORMAT_VERSION`。
+请求所解析到的路由的上下文元数据是独立的已记录状态，在同一步骤内紧随 `request/header` 追加：每个轮次的首个请求追加一次，轮次内当提供方、模型、容量或价格费率与上一条记录不同时再次追加。每个轮次都重新锚定，可让仅折叠自身事件的轮次局部读取方（已完成轮次的用量披露）无需重放更早的轮次即可得到路由及其价格费率；该记录像其他所有执行事件一样携带记录它的 `turn` 与 `step`，因此轮次作用域的消费方可以认领它。它保持在 `EpochHeader` 之外，因为该类型是 `headerEquals` 逐字段比较的重建约定。容量描述的是路由，不是请求输入，把它折叠进去会让一次容量变化被登记为请求信封的 `change`，也会把适配器元数据拉进 loop 的重建不变式。与 `request/header` 一样，它不是 `SurfaceEventType`，也不产生 LLM 消息。`session.requestContext()` 以增量方式归并最新一条记录。适配器不公布容量的路由会以缺失 `contextWindow` 的形式记录，因此新记录可以清除较早路由的容量。可选的 `pricing`（每百万 token 美元费率）是呈现与成本估算用的元数据，记录在这里是为了让成本视图仅凭日志即可重建；它绝不进入模型请求，是增量的，也不移动 `SESSION_FORMAT_VERSION`。
 
 ```ts type-equiv
 /** Registration-bound metadata for one resolved model route. */
 interface RequestContext {
+  /** Turn that logged this record; every request/context sits inside its open turn. */
+  turn: number
+  /** Step that logged this record. */
+  step: number
   /** Registered provider route the metadata belongs to. */
   provider: string
   /** Provider-owned model id the metadata belongs to. */

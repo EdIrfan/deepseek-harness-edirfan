@@ -116,10 +116,12 @@ describe('legacy request-header format', () => {
 })
 
 describe('Session.requestContext', () => {
-  const CAPACITY = { provider: 'mock', model: 'm', contextWindow: 128_000 }
+  const CAPACITY = { turn: 1, step: 1, provider: 'mock', model: 'm', contextWindow: 128_000 }
 
   /** A turn-enclosed capacity record; the invariant rejects one outside a turn. */
-  function seedWith(...records: { provider: string; model: string; contextWindow?: number }[]): SessionEvent[] {
+  function seedWith(
+    ...records: { turn: number; step: number; provider: string; model: string; contextWindow?: number }[]
+  ): SessionEvent[] {
     const events: SessionEvent[] = [{
       type: 'turn/start', seq: 0, time: 1, data: { turn: 1 },
     }]
@@ -140,7 +142,7 @@ describe('Session.requestContext', () => {
       CAPACITY,
       { ...CAPACITY, model: 'later', contextWindow: 256_000 },
     ))
-    expect(session.requestContext()).toEqual({ provider: 'mock', model: 'later', contextWindow: 256_000 })
+    expect(session.requestContext()).toEqual({ turn: 1, step: 1, provider: 'mock', model: 'later', contextWindow: 256_000 })
   })
 
   it('advances incrementally across appends and skips unrelated events', () => {
@@ -151,9 +153,9 @@ describe('Session.requestContext', () => {
     }), { surfaceOp: 'append' })
     expect(session.requestContext()).toEqual(CAPACITY)
     session.append('request/context', { ...CAPACITY, model: 'next', contextWindow: 64_000 })
-    expect(session.requestContext()).toEqual({ provider: 'mock', model: 'next', contextWindow: 64_000 })
-    session.append('request/context', { provider: 'mock', model: 'unknown' })
-    expect(session.requestContext()).toEqual({ provider: 'mock', model: 'unknown' })
+    expect(session.requestContext()).toEqual({ turn: 1, step: 1, provider: 'mock', model: 'next', contextWindow: 64_000 })
+    session.append('request/context', { turn: 1, step: 1, provider: 'mock', model: 'unknown' })
+    expect(session.requestContext()).toEqual({ turn: 1, step: 1, provider: 'mock', model: 'unknown' })
   })
 
   it('folds a batch appended between two reads', () => {

@@ -772,8 +772,8 @@ describe('request/context capacity records', () => {
     const records = agent.session.events.filter(event => event.type === 'request/context')
     expect(records).toHaveLength(2)
     expect(records.map(record => record.data)).toEqual([
-      { provider: 'mock', model: 'mock', contextWindow: 128_000 },
-      { provider: 'mock', model: 'mock', contextWindow: 128_000 },
+      { turn: 1, step: 1, provider: 'mock', model: 'mock', contextWindow: 128_000 },
+      { turn: 2, step: 1, provider: 'mock', model: 'mock', contextWindow: 128_000 },
     ])
     // Log-only: not a SurfaceEventType, so it can never reach a model request
     // (the type system rejects a surfaceOp here; the session invariant also
@@ -810,9 +810,9 @@ describe('request/context capacity records', () => {
     expect(agent.session.events
       .filter(event => event.type === 'request/context')
       .map(event => event.data)).toEqual([
-      { provider: 'mock', model: 'mock', pricing: rates },
-      { provider: 'mock', model: 'mock', pricing: rates },
-      { provider: 'mock', model: 'mock' },
+      { turn: 1, step: 1, provider: 'mock', model: 'mock', pricing: rates },
+      { turn: 2, step: 1, provider: 'mock', model: 'mock', pricing: rates },
+      { turn: 3, step: 1, provider: 'mock', model: 'mock' },
     ])
   })
 
@@ -847,8 +847,8 @@ describe('request/context capacity records', () => {
     expect(agent.session.events
       .filter(event => event.type === 'request/context')
       .map(event => event.data)).toEqual([
-      { provider: 'mock', model: 'mock' },
-      { provider: 'mock', model: 'mock' },
+      { turn: 1, step: 1, provider: 'mock', model: 'mock' },
+      { turn: 2, step: 1, provider: 'mock', model: 'mock' },
     ])
   })
 
@@ -870,8 +870,8 @@ describe('request/context capacity records', () => {
     expect(agent.session.events
       .filter(event => event.type === 'request/context')
       .map(event => event.data)).toEqual([
-      { provider: 'mock', model: 'known', contextWindow: 64_000 },
-      { provider: 'mock', model: 'unknown' },
+      { turn: 1, step: 1, provider: 'mock', model: 'known', contextWindow: 64_000 },
+      { turn: 2, step: 1, provider: 'mock', model: 'unknown' },
     ])
   })
 })
