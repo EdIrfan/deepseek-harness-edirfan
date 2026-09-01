@@ -192,14 +192,34 @@ export interface EpochHeader {
   tools?: ToolSchema[]
 }
 
+/** Per-token USD rates (per million tokens) recorded with one request. */
+export interface RequestContextPricing {
+  readonly inputPerMTok: number
+  readonly outputPerMTok: number
+  readonly cacheReadPerMTok: number
+  readonly cacheWritePerMTok: number
+}
+
 /** Registration-bound metadata for one resolved model route. */
 export interface RequestContext {
+  /** Turn that logged this record; every request/context sits inside its open turn. */
+  turn: number
+  /** Step that logged this record. */
+  step: number
   /** Registered provider route the metadata belongs to. */
   provider: string
   /** Provider-owned model id the metadata belongs to. */
   model: string
   /** Maximum combined request and response context in tokens, when advertised. */
   contextWindow?: number
+  /**
+   * Per-token price rates (USD per million tokens) for {@link model} on
+   * {@link provider} at request time, when the adapter resolved them.
+   * Presentation and cost-estimate metadata — never sent to the model; carried
+   * here so cost views reconstruct from the log alone. Optional and additive:
+   * a log written before this field simply yields no cost estimate.
+   */
+  pricing?: RequestContextPricing
 }
 
 /**
@@ -295,8 +315,9 @@ export interface SessionEventMap {
     startsSeries?: true
   }
   /**
-   * Route metadata for the next request, logged only when the route or capacity
-   * changes. It does not participate in request reconstruction or header equality.
+   * Route metadata for the next request, logged at each turn's first request and
+   * again mid-turn when the route, capacity, or price rates change. It does not
+   * participate in request reconstruction or header equality.
    */
   'request/context': RequestContext
   /**

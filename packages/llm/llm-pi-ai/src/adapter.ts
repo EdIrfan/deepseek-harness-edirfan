@@ -49,6 +49,8 @@ import type {
   GenerateOptions,
   ImageAttachmentAccess,
   LlmModelInfo,
+  LlmModelPricing,
+  LlmProviderAccountBalance,
   LlmProviderInfo,
   LlmResolvedModelInfo,
   PreparedAdapterCall,
@@ -58,6 +60,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { openRouterAccountBalance } from './account.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
@@ -201,6 +204,29 @@ function reasoningInfo(
   }
 }
 
+/**
+ * Project a pi-ai model's catalog cost into the seam's pricing. pi-ai quotes
+ * `cost` in USD per million tokens, which is exactly this seam's unit, so the
+ * rates pass through unscaled. pi-ai ships real rates with its installed
+ * catalog; a hand-declared route carries `NO_COST` (all zero), which states no
+ * answer rather than "free" — so an all-zero cost resolves to no pricing.
+ * Volume tiers are flattened to the base rates: request-size-aware pricing has
+ * no consumer yet.
+ * @param cost - the resolved pi-ai model's `cost` rates.
+ * @returns the four per-million-token rates, or `undefined` when every rate is zero.
+ */
+function modelPricing(cost: Model<Api>['cost']): LlmModelPricing | undefined {
+  if (cost.input === 0 && cost.output === 0 && cost.cacheRead === 0 && cost.cacheWrite === 0) {
+    return undefined
+  }
+  return {
+    inputPerMTok: cost.input,
+    outputPerMTok: cost.output,
+    cacheReadPerMTok: cost.cacheRead,
+    cacheWritePerMTok: cost.cacheWrite,
+  }
+}
+
 /** Merge deployment headers while removing case-insensitive attribution collisions. */
 function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
   const attribution = attributionHeaders()
@@ -292,6 +318,22 @@ export class PiAiAdapter extends LlmAdapter {
     })
   }
 
+  override providerAccountBalance(
+    provider: string,
+    signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined> {
+    const snapshot = this.current()
+    const profile = this.profileOf(snapshot, provider)
+    // The route's endpoint: a profile override, else the first catalog model's
+    // own `baseUrl`. Every model on one route shares it.
+    const baseURL = profile.baseURL ?? snapshot.models.getModels(provider)[0]?.baseUrl
+    return openRouterAccountBalance({
+      baseURL,
+      signal,
+      resolveKey: () => this.config.resolveApiKey(provider, profile),
+    })
+  }
+
   private modelInfo(snapshot: PiAiSnapshot, provider: string, model: string): LlmResolvedModelInfo {
     const profile = this.profileOf(snapshot, provider)
     const resolvedModel = this.modelOf(snapshot, provider, model)
@@ -299,6 +341,7 @@ export class PiAiAdapter extends LlmAdapter {
     // Only a cap the deployment configured is a request default; the
     // catalog's `maxTokens` sizes the model and stops there.
     const configuredMaxTokens = profile.configuredMaxTokens.get(model)
+    const pricing = modelPricing(resolvedModel.cost)
     return {
       provider,
       id: model,
@@ -306,6 +349,7 @@ export class PiAiAdapter extends LlmAdapter {
       inputModalities: [...resolvedModel.input],
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
+      ...pricing === undefined ? {} : { pricing },
       ...reasoningInfo(resolvedModel, defaultLevel),
     }
   }

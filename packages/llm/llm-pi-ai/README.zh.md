@@ -96,6 +96,10 @@ pi-ai 提供登录的提供方可以通过 harness 授权 seam 登录：流程�
 
 profile 的 `models` 列表会替换而非扩展路由的已安装目录；每个条目从同 id 已安装模型取未设置字段的默认值，因此把路由收窄到两个模型、修正一个容量或添加比已安装目录更新的模型都是一行编辑。`modelOverrides` 无需该代价即可重塑个别已安装目录模型——修正一个模型，保留其余三十七个——当它与 `models` 列表并存、位于手工声明路由上、或点名目录未描述的模型时会被拒绝，因为静默不变的模型会成为别人日后寻找的拼写错误。
 
+已安装目录中的模型会带着目录的每 token 价格费率（每百万 token 美元）一起解析，呈现在 LLM 服务已解析模型信息的 `pricing` 上；手工声明路由没有价格，解析不出。费率原样透传——pi-ai 的 `cost` 单位就是本接缝的单位——价格分层被压平为基础费率。定价仅为展示用元数据。
+
+端点 host 为 `openrouter.ai` 的路由，`ctx.llm.providerAccountBalance` 会用与请求相同的已解析凭据从 OpenRouter 的 `GET /api/v1/key`（该密钥的剩余余额与累计花费）作答。其他路由一律作答 `undefined`。这次查询本身不按 token 计费。非 2xx 回复或网络故障抛出 `ACCOUNT_QUERY_FAILED`；中止抛出 `ABORTED`。
+
 ### 带推理与协议兼容运行
 
 `reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是该等级过线的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。

@@ -101,8 +101,9 @@ interface SessionEventMap {
     startsSeries?: true
   }
   /**
-   * Route metadata for the next request, logged only when the route or capacity
-   * changes. It does not participate in request reconstruction or header equality.
+   * Route metadata for the next request, logged at each turn's first request and
+   * again mid-turn when the route, capacity, or price rates change. It does not
+   * participate in request reconstruction or header equality.
    */
   'request/context': RequestContext
   /**
@@ -161,17 +162,29 @@ Canonical form represents an empty system prompt or tool list as an absent field
 
 ### The route capacity event: `request/context`
 
-The context metadata of the route a request resolved to is separate logged state, appended beside `request/header` inside the same step and only when the provider, model, or capacity differs from the previous record. It stays outside `EpochHeader` because that type is the reconstruction contract compared field-wise by `headerEquals`: capacity describes a route, not a request input, so folding it in would let a capacity change register as a request-envelope `change` and would pull adapter metadata into the loop's reconstruction invariant. Like `request/header`, it is not a `SurfaceEventType` and produces no LLM message. `session.requestContext()` folds the latest record incrementally. A route whose adapter advertises no capacity is recorded with `contextWindow` absent, so the new record clears an older route's capacity.
+The context metadata of the route a request resolved to is separate logged state, appended beside `request/header` inside the same step: once at each turn's first request, and again mid-turn whenever the provider, model, capacity, or price rates differ from the previous record. Re-anchoring every turn lets a turn-local reader — the completed-Turn usage disclosure — fold the route and its price rates from that turn's own events without replaying earlier turns; the record carries the `turn` and `step` that logged it, like every other execution event, so a turn-scoped consumer can claim it. It stays outside `EpochHeader` because that type is the reconstruction contract compared field-wise by `headerEquals`: capacity describes a route, not a request input, so folding it in would let a capacity change register as a request-envelope `change` and would pull adapter metadata into the loop's reconstruction invariant. Like `request/header`, it is not a `SurfaceEventType` and produces no LLM message. `session.requestContext()` folds the latest record incrementally. A route whose adapter advertises no capacity is recorded with `contextWindow` absent, so the new record clears an older route's capacity. The optional `pricing` (per-million-token USD rates) is presentation and cost-estimate metadata carried here so cost views reconstruct from the log alone; it never reaches a model request, is additive, and does not move `SESSION_FORMAT_VERSION`.
 
 ```ts type-equiv
 /** Registration-bound metadata for one resolved model route. */
 interface RequestContext {
+  /** Turn that logged this record; every request/context sits inside its open turn. */
+  turn: number
+  /** Step that logged this record. */
+  step: number
   /** Registered provider route the metadata belongs to. */
   provider: string
   /** Provider-owned model id the metadata belongs to. */
   model: string
   /** Maximum combined request and response context in tokens, when advertised. */
   contextWindow?: number
+  /**
+   * Per-token price rates (USD per million tokens) for {@link model} on
+   * {@link provider} at request time, when the adapter resolved them.
+   * Presentation and cost-estimate metadata — never sent to the model; carried
+   * here so cost views reconstruct from the log alone. Optional and additive:
+   * a log written before this field simply yields no cost estimate.
+   */
+  pricing?: RequestContextPricing
 }
 ```
 

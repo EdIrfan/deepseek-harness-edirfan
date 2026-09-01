@@ -113,12 +113,32 @@ export interface ModelReasoning {
   readonly defaultEffort?: string
 }
 
+/** Price rates in USD per million tokens for one catalog model, when the adapter resolved them. */
+export interface ModelPricing {
+  readonly inputPerMTok: number
+  readonly outputPerMTok: number
+  readonly cacheReadPerMTok: number
+  readonly cacheWritePerMTok: number
+}
+
 /** One model displayed inside its provider group. */
 export interface ModelCatalogModel {
   readonly id: string
   readonly name: string
   readonly description?: string
   readonly reasoning?: ModelReasoning
+  /** Maximum combined request and response context in tokens, when the adapter resolved one. */
+  readonly contextWindow?: number
+  /** Provider-published price rates (USD per million tokens), when the adapter resolved them. */
+  readonly pricing?: ModelPricing
+}
+
+/** Live provider-account figures (USD) for a group whose provider bills a prepaid balance. */
+export interface ModelProviderAccount {
+  /** Spendable balance remaining, when the provider reports a cap. */
+  readonly balanceUsd?: number
+  /** Cumulative spend on the configured key, when the provider reports it. */
+  readonly usageUsd?: number
 }
 
 /** One provider and its successfully loaded model catalog. */
@@ -126,6 +146,8 @@ export interface ModelProviderGroup {
   readonly id: string
   readonly name: string
   readonly models: readonly ModelCatalogModel[]
+  /** Live account balance for a billed-balance provider (e.g. OpenRouter), when resolved. */
+  readonly account?: ModelProviderAccount
 }
 
 /** One provider whose model catalog lookup failed. */

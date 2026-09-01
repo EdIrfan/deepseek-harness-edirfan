@@ -1085,6 +1085,32 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('prices Turn usage from the turn-anchored request/context rates', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'request/context', {
+        turn: 1,
+        step: 1,
+        provider: 'fake',
+        model: 'fake',
+        pricing: { inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.028, cacheWritePerMTok: 0 },
+      }),
+      at(4, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('priced-assistant', 'done'),
+        usage: { inputTokens: 1000, outputTokens: 10, totalTokens: 1010 },
+      }, { surfaceOp: 'append' }),
+      at(5, 'step/end', { turn: 1, step: 1 }),
+      at(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ], true)
+
+    const usage = (node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).tokenUsage
+    // 1000 * 0.14 / 1e6 + 10 * 0.28 / 1e6
+    expect(usage?.costUsd).toBeCloseTo((1000 * 0.14 + 10 * 0.28) / 1_000_000, 12)
+  })
+
   it('replays inbox predecessors after prepend and reclassifies the dependent message as steering', () => {
     const value = assembler([
       at(3, 'user/message', textMessage('steer-1', 'change direction'), { surfaceOp: 'append' }),

@@ -74,7 +74,8 @@ function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[
     || event.type === 'chunkrow/text-chunks'
     || event.type === 'chunkrow/reasoning-chunks'
     || event.type === 'chunkrow/tool-call-chunks'
-    || event.type === 'step/end') {
+    || event.type === 'step/end'
+    || event.type === 'request/context') {
     return { turn: event.data.turn, step: event.data.step }
   }
   if (event.type === 'llm/retry' || event.type === 'llm/retry-started') {

@@ -3,9 +3,70 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ModelCatalog,
+  ModelProviderAccount,
   ModelReasoning,
   ModelSelection,
 } from './types.ts'
+
+/**
+ * How long a resolved provider-account balance is reused before the next
+ * catalog build re-queries it. A politeness bound on an external endpoint, not
+ * a deployment knob: OpenRouter's balance moves slowly and the catalog rebuilds
+ * on every adapter, settings, or credential change.
+ */
+const ACCOUNT_TTL_MS = 60_000
+
+/** Per-catalog-build deadline for one provider-account balance query. */
+const ACCOUNT_QUERY_TIMEOUT_MS = 4_000
+
+interface AccountCacheEntry {
+  readonly at: number
+  readonly value: ModelProviderAccount | undefined
+}
+
+/** Process-wide cache of the last resolved account balance per provider route. */
+const accountCache = new Map<string, AccountCacheEntry>()
+
+/**
+ * Drop the provider-account cache. For tests only: production relies on the
+ * {@link ACCOUNT_TTL_MS} window, and there is no runtime reason to invalidate
+ * early.
+ */
+export function resetAccountCacheForTests(): void {
+  accountCache.clear()
+}
+
+/**
+ * Resolve one provider's live account balance, cached for {@link ACCOUNT_TTL_MS}.
+ * A failure or timeout is cosmetic: it resolves to `undefined` and is cached
+ * briefly so a broken endpoint does not re-slow every catalog build. A `catch`
+ * here is deliberate — the balance is decoration, and the group must load
+ * without it.
+ * @param ctx - Host context carrying the LLM registry.
+ * @param provider - the provider route id.
+ * @returns the account figures, or `undefined` when unavailable or not applicable.
+ */
+async function resolveAccount(ctx: Context, provider: string): Promise<ModelProviderAccount | undefined> {
+  const cached = accountCache.get(provider)
+  if (cached !== undefined && Date.now() - cached.at < ACCOUNT_TTL_MS) return cached.value
+  let value: ModelProviderAccount | undefined
+  try {
+    const balance = await ctx.llm.providerAccountBalance(provider, AbortSignal.timeout(ACCOUNT_QUERY_TIMEOUT_MS))
+    value = balance === undefined
+      ? undefined
+      : {
+        ...balance.balanceUsd === undefined ? {} : { balanceUsd: balance.balanceUsd },
+        ...balance.usageUsd === undefined ? {} : { usageUsd: balance.usageUsd },
+      }
+  } catch {
+    // A network error, a non-2xx reply, or the 4s timeout: the balance is a
+    // display extra, so the group still loads without it. Cached as `undefined`
+    // so the failing endpoint is not re-queried on the next few builds.
+    value = undefined
+  }
+  accountCache.set(provider, { at: Date.now(), value })
+  return value
+}
 
 /**
  * Build the browser model catalog without requiring a Session.
@@ -40,11 +101,28 @@ export async function buildModelCatalog(
           name: model.name,
           ...(model.description === undefined ? {} : { description: model.description }),
           ...(reasoning === undefined ? {} : { reasoning }),
+          ...(resolved.context?.contextWindow === undefined
+            ? {}
+            : { contextWindow: resolved.context.contextWindow }),
+          ...(resolved.pricing === undefined ? {} : {
+            pricing: {
+              inputPerMTok: resolved.pricing.inputPerMTok,
+              outputPerMTok: resolved.pricing.outputPerMTok,
+              cacheReadPerMTok: resolved.pricing.cacheReadPerMTok,
+              cacheWritePerMTok: resolved.pricing.cacheWritePerMTok,
+            },
+          }),
         }
       }))
+      const account = await resolveAccount(ctx, provider.id)
       return {
         kind: 'group' as const,
-        group: { id: provider.id, name: provider.name, models: entries },
+        group: {
+          id: provider.id,
+          name: provider.name,
+          models: entries,
+          ...(account === undefined ? {} : { account }),
+        },
       }
     } catch (error) {
       return {

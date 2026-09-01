@@ -17,6 +17,8 @@ import type {
   LlmModelContext,
   LlmModelDiscoveryRequest,
   LlmModelInfo,
+  LlmModelPricing,
+  LlmProviderAccountBalance,
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
@@ -162,6 +164,8 @@ export interface PreparedLlmCall {
   readonly retryPolicy: ResolvedRetryPolicy
   /** Detached context metadata resolved with the registration-bound call. */
   readonly context?: LlmModelContext
+  /** Detached per-token price rates (USD per million tokens) resolved with the call, when the adapter supplied them. */
+  readonly pricing?: LlmModelPricing
   /** Exact model modalities captured with the adapter dispatch generation. */
   readonly inputModalities?: readonly ModelModality[]
   /** Config fields materialized by the captured adapter rather than proposed by the caller. */
@@ -221,6 +225,20 @@ export abstract class LlmAdapter {
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined {
     return undefined
   }
+
+  /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (e.g. OpenRouter). Optional: the default resolves nothing. Return
+   * `undefined` for "not applicable"; throw only for a real network or auth
+   * failure. Must honor `_signal`.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @param _signal - caller lifetime.
+   * @returns the balance, or `undefined` when the route has no billed account.
+   */
+  providerAccountBalance?(
+    _provider: string,
+    _signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined>
 
   /**
    * List models this adapter can currently advertise for one owned provider.
@@ -659,6 +677,23 @@ export class LlmRuntime extends TypertRemoteService {
     return this.adapters.get(provider)?.adapter.imageRequestPricing(provider, model)
   }
 
+  /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (see {@link LlmAdapter.providerAccountBalance}). An unregistered
+   * route, or one whose adapter does not implement the query, resolves to
+   * `undefined`.
+   * @param provider - a registered provider route.
+   * @param signal - caller lifetime; abort ends the query.
+   * @returns the balance, or `undefined` when unavailable.
+   */
+  async providerAccountBalance(
+    provider: string,
+    signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined> {
+    const adapter = this.adapters.get(provider)?.adapter
+    return adapter?.providerAccountBalance?.(provider, signal)
+  }
+
   /** Detach typed adapter-owned modality metadata. */
   private detachedModalities(modalities: readonly ModelModality[] | undefined): ModelModality[] | undefined {
     return modalities === undefined ? undefined : [...modalities]
@@ -764,6 +799,7 @@ export class LlmRuntime extends TypertRemoteService {
         'INVALID_MODEL_MAX_TOKENS',
       )
     }
+    const pricing = normalizePricing(resolved.pricing, provider, model)
     const info: LlmResolvedModelInfo = {
       provider,
       id: model,
@@ -772,6 +808,7 @@ export class LlmRuntime extends TypertRemoteService {
       ...inputModalities === undefined ? {} : { inputModalities },
       ...context === undefined ? {} : { context: { contextWindow: context.contextWindow } },
       ...defaultMaxTokens === undefined ? {} : { defaultMaxTokens },
+      ...pricing === undefined ? {} : { pricing },
     }
     const reasoning = resolved.reasoning
     if (reasoning === undefined) return info
@@ -895,6 +932,9 @@ export class LlmRuntime extends TypertRemoteService {
     const context = resolved.context === undefined
       ? undefined
       : deepFreeze(structuredClone(resolved.context))
+    const pricing = modelInfo.pricing === undefined
+      ? undefined
+      : deepFreeze(structuredClone(modelInfo.pricing))
     const adapterDefaults = deepFreeze<LlmCallConfigAdapterDefaults>({
       ...config.reasoningEffort === undefined && resolvedConfig.reasoningEffort !== undefined
         ? { reasoningEffort: true }
@@ -909,6 +949,7 @@ export class LlmRuntime extends TypertRemoteService {
       retryPolicy: registration.retryPolicy,
       adapterDefaults,
       ...context === undefined ? {} : { context },
+      ...pricing === undefined ? {} : { pricing },
       ...modelInfo.inputModalities === undefined
         ? {}
         : { inputModalities: Object.freeze([...modelInfo.inputModalities]) },
@@ -1061,6 +1102,41 @@ export class LlmRuntime extends TypertRemoteService {
       options,
       () => this.adapterStream(options, prepared),
     )
+  }
+}
+
+/**
+ * Validate an adapter-resolved price structure at the adapter-result boundary.
+ * Every rate must be a finite non-negative number; a violation is an adapter
+ * fault, not caller input.
+ * @param pricing - the adapter's resolved rates, when it supplied any.
+ * @param provider - the registered provider route, for the diagnostic.
+ * @param model - the exact model id, for the diagnostic.
+ * @returns a detached copy of the four rates, or `undefined` when none was supplied.
+ */
+function normalizePricing(
+  pricing: LlmModelPricing | undefined,
+  provider: string,
+  model: string,
+): LlmModelPricing | undefined {
+  if (pricing === undefined) return undefined
+  const rates = [
+    pricing.inputPerMTok, pricing.outputPerMTok,
+    pricing.cacheReadPerMTok, pricing.cacheWritePerMTok,
+  ]
+  for (const rate of rates) {
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) {
+      throw new LlmError(
+        `adapter returned invalid price metadata for provider "${provider}" model "${model}"`,
+        'INVALID_MODEL_PRICING',
+      )
+    }
+  }
+  return {
+    inputPerMTok: pricing.inputPerMTok,
+    outputPerMTok: pricing.outputPerMTok,
+    cacheReadPerMTok: pricing.cacheReadPerMTok,
+    cacheWritePerMTok: pricing.cacheWritePerMTok,
   }
 }
 

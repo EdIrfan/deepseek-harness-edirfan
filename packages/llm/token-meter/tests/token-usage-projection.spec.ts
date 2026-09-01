@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { RequestContextPricing, Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -303,6 +303,68 @@ describe('tokenUsage session projection', () => {
       cacheWriteTokens: 0,
     })
   })
+
+  const RATES = {
+    inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.014, cacheWritePerMTok: 0,
+  }
+  function priceRoute(
+    session: Session, provider: string, model: string, rates?: RequestContextPricing,
+  ): void {
+    session.append('request/context', {
+      turn: 1, step: 1, provider, model, ...rates === undefined ? {} : { pricing: rates },
+    })
+  }
+  function stepUsage(
+    session: Session, usage: TokenUsage, turn: number, step: number, provider = 'mock', model = 'mock',
+  ): void {
+    startStep(session, turn, step)
+    session.append('assistant/message', {
+      turn,
+      step,
+      message: createMessage({
+        role: 'assistant', content: [], source: { kind: 'model', provider, model },
+      }),
+      usage,
+    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    session.append('step/end', { turn, step })
+  }
+  const U = (over: Partial<TokenUsage> = {}): TokenUsage => ({
+    inputTokens: 100, outputTokens: 20, totalTokens: 170, cacheReadTokens: 50, cacheWriteTokens: 0, ...over,
+  })
+
+  it('derives a whole-session cost and per-route spend from logged rates', async () => {
+    const { ctx, session } = await harness()
+    priceRoute(session, 'mock', 'mock', RATES)
+    stepUsage(session, U(), 1, 1)
+    stepUsage(session, U(), 2, 1)
+
+    const view = projected(ctx, session)
+    const perStep = (100 * 0.14 + 50 * 0.014 + 20 * 0.28) / 1_000_000
+    expect(view.costUsd).toBeCloseTo(perStep * 2, 12)
+    expect(view.byRoute).toHaveLength(1)
+    const route = view.byRoute?.[0]
+    expect(route).toMatchObject({
+      provider: 'mock', model: 'mock',
+      uncachedInputTokens: 200, outputTokens: 40, cacheReadTokens: 100, cacheWriteTokens: 0,
+    })
+    expect(route?.costUsd).toBeCloseTo(perStep * 2, 12)
+    // The flat totals are unchanged for count-only consumers.
+    expect(view.uncachedInputTokens).toBe(200)
+  })
+
+  it('omits the session cost when one billed route logged no rates but still lists it', async () => {
+    const { ctx, session } = await harness()
+    priceRoute(session, 'mock', 'priced', RATES)
+    stepUsage(session, U(), 1, 1, 'mock', 'priced')
+    priceRoute(session, 'mock', 'free')
+    stepUsage(session, U(), 2, 1, 'mock', 'free')
+
+    const view = projected(ctx, session)
+    expect(view).not.toHaveProperty('costUsd')
+    expect(view.byRoute?.map(route => [route.model, route.costUsd !== undefined])).toEqual([
+      ['priced', true], ['free', false],
+    ])
+  })
 })
 
 const pressure = (ctx: Context, session: Session): ContextPressureProjection => {
@@ -313,6 +375,8 @@ const pressure = (ctx: Context, session: Session): ContextPressureProjection => 
 
 function recordContext(session: Session, model: string, contextWindow?: number): void {
   session.append('request/context', {
+    turn: 1,
+    step: 1,
     provider: 'mock',
     model,
     ...contextWindow === undefined ? {} : { contextWindow },

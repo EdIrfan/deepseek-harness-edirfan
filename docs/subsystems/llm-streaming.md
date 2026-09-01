@@ -551,6 +551,8 @@ interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /** Provider-published price rates (USD per million tokens) when the adapter resolved them. */
+  pricing?: LlmModelPricing
 }
 ```
 
@@ -737,6 +739,8 @@ interface PreparedLlmCall {
   readonly retryPolicy: ResolvedRetryPolicy
   /** Detached context metadata resolved with the registration-bound call. */
   readonly context?: LlmModelContext
+  /** Detached per-token price rates (USD per million tokens) resolved with the call, when the adapter supplied them. */
+  readonly pricing?: LlmModelPricing
   /** Exact model modalities captured with the adapter dispatch generation. */
   readonly inputModalities?: readonly ModelModality[]
   /** Config fields materialized by the captured adapter rather than proposed by the caller. */
@@ -782,6 +786,19 @@ declare abstract class LlmAdapter {
    * @returns route-owned image pricing, or `undefined` when the route declares none.
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
+  /**
+   * Resolve live account state for one route whose provider bills a prepaid
+   * balance (e.g. OpenRouter). Optional: the default resolves nothing. Return
+   * `undefined` for "not applicable"; throw only for a real network or auth
+   * failure. Must honor `_signal`.
+   * @param _provider - a route passed to `registerAdapter()` for this instance.
+   * @param _signal - caller lifetime.
+   * @returns the balance, or `undefined` when the route has no billed account.
+   */
+  providerAccountBalance?(
+    _provider: string,
+    _signal: AbortSignal,
+  ): Promise<LlmProviderAccountBalance | undefined>;
   /**
    * List models this adapter can currently advertise for one owned provider.
    * The result is advisory: an adapter may accept unlisted model ids, and

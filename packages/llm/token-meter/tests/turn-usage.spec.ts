@@ -394,4 +394,50 @@ describe('deriveTurnTokenUsage', () => {
     expect(deriveTurnTokenUsage(completeAttempt(message(3, usage())).slice(1))).toBeUndefined()
     expect(deriveTurnTokenUsage(completeAttempt(message(3, usage())).slice(0, -1))).toBeUndefined()
   })
+
+  const RATES = {
+    inputPerMTok: 0.14, outputPerMTok: 0.28, cacheReadPerMTok: 0.014, cacheWritePerMTok: 0,
+  }
+  function context(seq: number, pricing?: unknown, provider = 'deepseek', model = 'deepseek-chat'): SessionEvent {
+    return event(seq, 'request/context', {
+      turn: 1, step: 1, provider, model, ...pricing === undefined ? {} : { pricing },
+    })
+  }
+
+  it('prices a single-route turn from the logged request/context rates', () => {
+    // 100 uncached in * 0.14 + 50 cache read * 0.014 + 20 out * 0.28, all / 1e6
+    const expected = (100 * 0.14 + 50 * 0.014 + 20 * 0.28) / 1_000_000
+    const result = deriveTurnTokenUsage(completeAttempt(
+      context(3, RATES),
+      message(4, usage({ cacheWriteTokens: 0 })),
+    ))
+    expect(result?.costUsd).toBeCloseTo(expected, 12)
+  })
+
+  it('omits costUsd when the route logged no rates', () => {
+    const result = deriveTurnTokenUsage(completeAttempt(
+      context(3),
+      message(4, usage({ cacheWriteTokens: 0 })),
+    ))
+    expect(result).toBeDefined()
+    expect(result).not.toHaveProperty('costUsd')
+  })
+
+  it('sums per-route cost across two steps on differently priced routes', () => {
+    const events = [
+      event(1, 'turn/start', { turn: 1 }),
+      event(2, 'step/start', { turn: 1, step: 1 }),
+      context(3, RATES, 'deepseek', 'deepseek-chat'),
+      message(4, usage({ cacheWriteTokens: 0 }), 'deepseek', 'deepseek-chat', 1),
+      event(5, 'step/end', { turn: 1, step: 1 }),
+      event(6, 'step/start', { turn: 1, step: 2 }),
+      context(7, { ...RATES, outputPerMTok: 1 }, 'openrouter', 'big'),
+      message(8, usage({ cacheWriteTokens: 0 }), 'openrouter', 'big', 2),
+      event(9, 'step/end', { turn: 1, step: 2 }),
+      event(10, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ]
+    const first = (100 * 0.14 + 50 * 0.014 + 20 * 0.28) / 1_000_000
+    const second = (100 * 0.14 + 50 * 0.014 + 20 * 1) / 1_000_000
+    expect(deriveTurnTokenUsage(events)?.costUsd).toBeCloseTo(first + second, 12)
+  })
 })

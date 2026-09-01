@@ -31,7 +31,7 @@ Chat shows a collapsed `System prompt` row for each non-empty initial or resumed
 <a id="turn-token-usage"></a>
 ## Turn token usage
 
-A completed Turn shows an expandable usage row only when the loaded window includes `turn/start` and every started model attempt reports safe, exact usage. The row omits unavailable optional buckets. Incomplete or contradictory accounting hides the complete disclosure instead of presenting a partial total.
+A completed Turn shows an expandable usage row only when the loaded window includes `turn/start` and every started model attempt reports safe, exact usage. The row omits unavailable optional buckets. Incomplete or contradictory accounting hides the complete disclosure instead of presenting a partial total. When every attempt's route logged price rates on its `request/context` event, the row adds an estimated `Cost — ≈ $X (est.)` line, summed from the exact token counts and the logged rates; the estimate costs no model tokens and always carries the "(est.)" label. The composer stats strip carries the same estimate at whole-session scope: when the `tokenUsage` projection resolves a session `costUsd`, the strip appends an `≈ $X (est.)` group after the token counts.
 
 -----
 

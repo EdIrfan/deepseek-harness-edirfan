@@ -489,6 +489,38 @@ describe('provider profile lifecycle', () => {
     expect(typeof info.context?.contextWindow).toBe('number')
   })
 
+  it('surfaces the installed catalog cost as per-million-token pricing, and none for a hand-declared route', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        deepseek: {},
+        'acme-gateway': {
+          displayName: 'Acme',
+          api: 'openai-completions',
+          baseURL: 'https://gateway.acme.example/v1',
+          models: [{ id: 'acme-large', name: 'Acme Large' }],
+        },
+      },
+    })
+
+    const priced = await ctx.llm.resolveModelInfo('deepseek', 'deepseek-v4-flash')
+    const rates = priced.pricing
+    if (rates === undefined) throw new Error('expected the catalog route to resolve pricing')
+    expect(Object.keys(rates).sort()).toEqual([
+      'cacheReadPerMTok', 'cacheWritePerMTok', 'inputPerMTok', 'outputPerMTok',
+    ])
+    for (const rate of Object.values(rates)) {
+      expect(typeof rate).toBe('number')
+      expect(rate).toBeGreaterThanOrEqual(0)
+    }
+    expect(rates.inputPerMTok).toBeGreaterThan(0)
+    expect(rates.outputPerMTok).toBeGreaterThan(0)
+
+    const handDeclared = await ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')
+    expect(handDeclared.pricing).toBeUndefined()
+  })
+
   it('exposes pi-ai model thinking levels verbatim without inventing a provider default', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

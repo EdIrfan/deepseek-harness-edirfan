@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DisclosureRow, IconDataOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TurnTokenUsage } from '../contract/chat-nodes.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
-import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
+import { formatCacheHitPercent, formatExactTokens, formatTokens, formatUsd } from './token-format.ts'
 import css from './TurnUsageDisclosure.module.css'
 
 export interface TurnUsageDisclosureProps {
@@ -80,6 +80,14 @@ export function TurnUsageDisclosure({ usage, t }: TurnUsageDisclosureProps) {
         </dd>
         <dt className={css.totalLabel}>{t('message.turnUsage.total')}</dt>
         <dd className={css.totalValue}>{formatExactCount(usage.totalTokens, t)}</dd>
+        {usage.costUsd !== undefined && (
+          <>
+            <dt className={css.totalLabel}>{t('message.turnUsage.cost')}</dt>
+            <dd className={css.totalValue}>
+              {t('message.turnUsage.costEstimate', { amount: formatUsd(usage.costUsd) })}
+            </dd>
+          </>
+        )}
       </dl>
     </DisclosureRow>
   )

@@ -37,6 +37,30 @@ describe('TurnUsageDisclosure', () => {
     expect(details.textContent).toContain('Cache write0 tok')
     expect(details.textContent).toContain('Output5,800 tok (42 tok reasoning)')
     expect(details.textContent).toContain('Total15,800 tok')
+    expect(details.textContent).not.toContain('Cost')
+  })
+
+  it('shows an estimated cost line only when the turn resolved a cost', () => {
+    const priced: TurnTokenUsage = {
+      uncachedInputTokens: 5_060,
+      outputTokens: 5_800,
+      totalTokens: 10_860,
+      routes: [{ provider: 'deepseek', model: 'deepseek-chat' }],
+      costUsd: 0.001234,
+    }
+    const view = render(<TurnUsageDisclosure usage={priced} t={t} />)
+    fireEvent.click(view.getByRole('button'))
+    const details = view.container.querySelector('[data-turn-usage-details]') as HTMLElement
+    expect(details.textContent).toContain('Cost≈ $0.0012 (est.)')
+
+    cleanup()
+    const unpriced: TurnTokenUsage = {
+      uncachedInputTokens: 5_060, outputTokens: 5_800, totalTokens: 10_860,
+    }
+    const view2 = render(<TurnUsageDisclosure usage={unpriced} t={t} />)
+    fireEvent.click(view2.getByRole('button'))
+    const details2 = view2.container.querySelector('[data-turn-usage-details]') as HTMLElement
+    expect(details2.textContent).not.toContain('Cost')
   })
 
   it('omits unavailable optional facts instead of inventing values', () => {

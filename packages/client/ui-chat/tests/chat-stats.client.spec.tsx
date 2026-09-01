@@ -177,6 +177,17 @@ describe('StatsLine', () => {
     expect(emptyView.container.textContent).toBe('')
   })
 
+  it('appends an estimated cost group only when the projection resolved one', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const priced = render(<StatsLine {...props(source, {
+      tokenUsage: { ...tokenUsage(90, 10), costUsd: 0.0342 },
+    })} />)
+    expect(priced.container.textContent).toContain('≈ $0.03 (est.)')
+
+    const unpriced = render(<StatsLine {...props(source, { tokenUsage: tokenUsage(90, 10) })} />)
+    expect(unpriced.container.textContent).not.toContain('est.')
+  })
+
   it.each([
     { actual: '98.6%', tokenUsageValue: tokenUsage(986, 14), expected: 'Cache hit 99%' },
     { actual: '99.1%', tokenUsageValue: tokenUsage(991, 9), expected: 'Cache hit 99%' },
