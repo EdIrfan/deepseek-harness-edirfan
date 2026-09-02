@@ -80,15 +80,6 @@ function listingUrl(baseURL: string): string {
 }
 
 /**
- * Read a listing reply body, refusing one that outgrows the ceiling. A
- * truncated model listing is not parseable, so overflow rejects with
- * `DISCOVERY_FAILED` instead of truncating.
- */
-function readBounded(response: Response, url: string): Promise<string> {
-  return readBoundedText(response, url, 'DISCOVERY_FAILED')
-}
-
-/**
  * Read one OpenAI-compatible listing reply. Entries without a usable id are
  * skipped rather than failing the whole interrogation: a single malformed row
  * should not deny the user the rest of a working endpoint's catalog.
@@ -222,7 +213,9 @@ export async function discoverModels(
   }
   let text: string
   try {
-    text = await readBounded(response, url)
+    // A truncated model listing is not parseable, so an oversized body rejects
+    // as DISCOVERY_FAILED rather than being cut.
+    text = await readBoundedText(response, url, 'DISCOVERY_FAILED')
   } catch (error: unknown) {
     // Cancellation during the body read rejects with the abort reason, which
     // may be any value; the caller gets the same coded failure it would have

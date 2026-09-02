@@ -7,5 +7,3 @@
 export type * from './projection.ts'
 export { deriveTurnTokenUsage } from './turn-usage.ts'
 export type { TurnTokenUsage, TurnTokenUsageRoute } from './turn-usage.ts'
-export { costOf } from './pricing.ts'
-export type { CostBuckets } from './pricing.ts'

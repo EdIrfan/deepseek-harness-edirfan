@@ -113,7 +113,11 @@ export interface ModelReasoning {
   readonly defaultEffort?: string
 }
 
-/** Price rates in USD per million tokens for one catalog model, when the adapter resolved them. */
+/**
+ * Price rates in USD per million tokens for one catalog model, when the adapter
+ * resolved them. Wire mirror of `LlmModelPricing` — the browser catalog builder
+ * cannot import the `llm` seam, so the shape is repeated here.
+ */
 export interface ModelPricing {
   readonly inputPerMTok: number
   readonly outputPerMTok: number
@@ -133,12 +137,10 @@ export interface ModelCatalogModel {
   readonly pricing?: ModelPricing
 }
 
-/** Live provider-account figures (USD) for a group whose provider bills a prepaid balance. */
+/** Live provider-account figure (USD) for a group whose provider bills a prepaid balance. */
 export interface ModelProviderAccount {
   /** Spendable balance remaining, when the provider reports a cap. */
   readonly balanceUsd?: number
-  /** Cumulative spend on the configured key, when the provider reports it. */
-  readonly usageUsd?: number
 }
 
 /** One provider and its successfully loaded model catalog. */

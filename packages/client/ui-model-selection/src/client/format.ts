@@ -58,7 +58,7 @@ export function formatPricePair(inputPerMTok: number, outputPerMTok: number): st
  * @param usd - a non-negative dollar amount.
  * @returns the display string.
  */
-export function formatUsd(usd: number): string {
+export function formatBalanceUsd(usd: number): string {
   if (usd === 0) return '$0'
   if (usd < 0.01) return '< $0.01'
   return `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

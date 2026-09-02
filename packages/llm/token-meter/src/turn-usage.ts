@@ -33,9 +33,9 @@ export interface TurnTokenUsage {
   readonly costUsd?: number
 }
 
-/** `"provider\0model"` key for the per-route price and bucket maps. */
-function routeKey(route: TurnTokenUsageRoute): string {
-  return `${route.provider}\0${route.model}`
+/** `"provider\0model"` key for the per-route price map. */
+function routeKey(provider: string, model: string): string {
+  return `${provider}\0${model}`
 }
 
 interface NormalizedAttempt {
@@ -142,7 +142,7 @@ function turnCost(
   let total = 0
   for (const attempt of attempts) {
     if (attempt.route === undefined) return undefined
-    const rates = pricingByRoute.get(routeKey(attempt.route))
+    const rates = pricingByRoute.get(routeKey(attempt.route.provider, attempt.route.model))
     if (rates === undefined) return undefined
     total += costOf({
       uncachedInputTokens: attempt.inputTokens,
@@ -177,7 +177,7 @@ function aggregateAttempts(
   const attributed = attempts.map(attempt => attempt.route)
   if (attributed.every((route): route is TurnTokenUsageRoute => route !== undefined)) {
     const unique = new Map<string, TurnTokenUsageRoute>()
-    for (const route of attributed) unique.set(routeKey(route), route)
+    for (const route of attributed) unique.set(routeKey(route.provider, route.model), route)
     routes = [...unique.values()]
   }
 
@@ -253,7 +253,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
     }
     if (event.type === 'request/context') {
       if (event.data.pricing !== undefined) {
-        pricingByRoute.set(`${event.data.provider}\0${event.data.model}`, event.data.pricing)
+        pricingByRoute.set(routeKey(event.data.provider, event.data.model), event.data.pricing)
       }
       continue
     }

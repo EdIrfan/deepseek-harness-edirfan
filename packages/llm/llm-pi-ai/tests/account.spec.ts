@@ -20,7 +20,7 @@ const key = async (): Promise<string> => 'sk-or-test'
 const signal = (): AbortSignal => AbortSignal.timeout(2_000)
 
 describe('openRouterAccountBalance', () => {
-  it('reads limit_remaining and usage from GET /api/v1/key', async () => {
+  it('reads limit_remaining from GET /api/v1/key', async () => {
     const requests = stubFetch(() => new Response(
       JSON.stringify({ data: { limit_remaining: 12.4, usage: 3.1 } }),
       { status: 200, headers: { 'content-type': 'application/json' } },
@@ -28,11 +28,11 @@ describe('openRouterAccountBalance', () => {
 
     const balance = await openRouterAccountBalance({ baseURL: OPENROUTER, resolveKey: key, signal: signal() })
 
-    expect(balance).toEqual({ balanceUsd: 12.4, usageUsd: 3.1 })
+    expect(balance).toEqual({ balanceUsd: 12.4 })
     expect(new Headers(requests[0]?.headers).get('authorization')).toBe('Bearer sk-or-test')
   })
 
-  it('returns an empty object when the key reports no cap and no usage', async () => {
+  it('returns an empty object when the key reports no cap', async () => {
     stubFetch(() => new Response(
       JSON.stringify({ data: { limit_remaining: null, label: 'k' } }),
       { status: 200, headers: { 'content-type': 'application/json' } },

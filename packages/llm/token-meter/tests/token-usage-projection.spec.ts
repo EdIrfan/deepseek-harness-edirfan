@@ -332,7 +332,7 @@ describe('tokenUsage session projection', () => {
     inputTokens: 100, outputTokens: 20, totalTokens: 170, cacheReadTokens: 50, cacheWriteTokens: 0, ...over,
   })
 
-  it('derives a whole-session cost and per-route spend from logged rates', async () => {
+  it('derives a whole-session cost from logged rates, leaving the flat totals alone', async () => {
     const { ctx, session } = await harness()
     priceRoute(session, 'mock', 'mock', RATES)
     stepUsage(session, U(), 1, 1)
@@ -341,29 +341,32 @@ describe('tokenUsage session projection', () => {
     const view = projected(ctx, session)
     const perStep = (100 * 0.14 + 50 * 0.014 + 20 * 0.28) / 1_000_000
     expect(view.costUsd).toBeCloseTo(perStep * 2, 12)
-    expect(view.byRoute).toHaveLength(1)
-    const route = view.byRoute?.[0]
-    expect(route).toMatchObject({
-      provider: 'mock', model: 'mock',
-      uncachedInputTokens: 200, outputTokens: 40, cacheReadTokens: 100, cacheWriteTokens: 0,
-    })
-    expect(route?.costUsd).toBeCloseTo(perStep * 2, 12)
-    // The flat totals are unchanged for count-only consumers.
     expect(view.uncachedInputTokens).toBe(200)
   })
 
-  it('omits the session cost when one billed route logged no rates but still lists it', async () => {
+  it('prices each turn at the rates in force when a session switches models', async () => {
+    const { ctx, session } = await harness()
+    const CHEAP = { inputPerMTok: 0.1, outputPerMTok: 0.2, cacheReadPerMTok: 0, cacheWritePerMTok: 0 }
+    const DEAR = { inputPerMTok: 1, outputPerMTok: 2, cacheReadPerMTok: 0, cacheWritePerMTok: 0 }
+    priceRoute(session, 'mock', 'cheap', CHEAP)
+    stepUsage(session, U({ cacheReadTokens: 0 }), 1, 1, 'mock', 'cheap')
+    priceRoute(session, 'mock', 'dear', DEAR)
+    stepUsage(session, U({ cacheReadTokens: 0 }), 2, 1, 'mock', 'dear')
+
+    const view = projected(ctx, session)
+    const cheap = (100 * 0.1 + 20 * 0.2) / 1_000_000
+    const dear = (100 * 1 + 20 * 2) / 1_000_000
+    expect(view.costUsd).toBeCloseTo(cheap + dear, 12)
+  })
+
+  it('suppresses the session cost when a billed turn logged no rates', async () => {
     const { ctx, session } = await harness()
     priceRoute(session, 'mock', 'priced', RATES)
     stepUsage(session, U(), 1, 1, 'mock', 'priced')
     priceRoute(session, 'mock', 'free')
     stepUsage(session, U(), 2, 1, 'mock', 'free')
 
-    const view = projected(ctx, session)
-    expect(view).not.toHaveProperty('costUsd')
-    expect(view.byRoute?.map(route => [route.model, route.costUsd !== undefined])).toEqual([
-      ['priced', true], ['free', false],
-    ])
+    expect(projected(ctx, session)).not.toHaveProperty('costUsd')
   })
 })
 

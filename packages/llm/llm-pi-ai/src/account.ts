@@ -1,7 +1,7 @@
 /**
  * Live account-balance lookup for a configured route whose provider bills a
  * prepaid balance. Only OpenRouter is implemented: its `GET /api/v1/key`
- * endpoint reports the key's spend cap and usage and is not itself token-billed.
+ * endpoint reports the key's remaining spend cap and is not itself token-billed.
  * Any other endpoint resolves to `undefined` — "not applicable", not a failure.
  * @module dsh-llm-pi-ai/account
  */
@@ -26,10 +26,9 @@ export interface OpenRouterAccountRequest {
   readonly signal: AbortSignal
 }
 
-/** The `data` object of an OpenRouter `GET /api/v1/key` reply, fields this module reads. */
+/** The `data` object of an OpenRouter `GET /api/v1/key` reply, the field this module reads. */
 interface KeyReplyData {
   limit_remaining?: unknown
-  usage?: unknown
 }
 
 /**
@@ -62,7 +61,8 @@ function isAbort(error: unknown): boolean {
  * Resolve one OpenRouter route's account balance, or `undefined` when the route
  * is not OpenRouter or carries no key.
  * @param request - the route's endpoint, key resolver, and caller lifetime.
- * @returns the balance figures, or `undefined` when not applicable.
+ * @returns `{ balanceUsd }` when the key reports a cap, `{}` when it does not,
+ *   or `undefined` when the query does not apply to this route.
  * @throws {LlmError} `ACCOUNT_QUERY_FAILED` on a non-2xx reply or a network
  *   error; `ABORTED` when the signal aborts.
  */
@@ -111,10 +111,5 @@ export async function openRouterAccountBalance(
 
   const data = (payload as { data?: KeyReplyData } | null)?.data ?? {}
   const balanceUsd = money(data.limit_remaining)
-  const usageUsd = money(data.usage)
-  if (balanceUsd === undefined && usageUsd === undefined) return {}
-  return {
-    ...balanceUsd === undefined ? {} : { balanceUsd },
-    ...usageUsd === undefined ? {} : { usageUsd },
-  }
+  return balanceUsd === undefined ? {} : { balanceUsd }
 }
