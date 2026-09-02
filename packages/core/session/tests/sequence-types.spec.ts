@@ -86,7 +86,7 @@ describe('Session log positions', () => {
     parent.append('turn/start', { turn: 1 })
     parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const assembled = Session.create(SessionId('assembled-seed'), parent.snapshotEvents())
-    assembled.append('request/context', { provider: 'provider', model: 'model' })
+    assembled.append('request/context', { turn: 1, step: 1, provider: 'provider', model: 'model' })
     const id = SessionId('suffix-child')
 
     const child = Session.create(id, assembled.snapshotEvents(), {
