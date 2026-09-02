@@ -20,7 +20,7 @@ export function formatTokens(value: number, t: ChatViewSlotProps['t']): string {
  * @param usd - a non-negative dollar amount.
  * @returns the display string.
  */
-export function formatUsd(usd: number): string {
+export function formatCostUsd(usd: number): string {
   if (usd === 0) return '$0'
   if (usd < 0.0001) return '< $0.0001'
   if (usd < 0.01) return `$${usd.toFixed(4).replace(/0+$/, '')}`

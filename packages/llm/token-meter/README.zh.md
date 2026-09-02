@@ -50,7 +50,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 `deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整 Turn 折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。当每次计费尝试都有路由、且该路由的 `request/context` 携带了价格费率时，折叠还会输出估算的 `costUsd`——`costOf`（`src/pricing.ts`）用精确的提供方上报 token 数乘以记录的每百万 token 费率。该估算使用日志里已有的提供方数字与静态目录费率，零模型 token 成本。提供方未上报的缓存读写按零计价，费率也只与随包目录一样新，因此消费方把该数字标为估算。
 
-持久 `tokenUsage` session 投影在会话尺度携带同样的估算。除扁平 `totals`（对只看计数的消费方保持不变）外，它的 wire 视图新增 `byRoute`——按提供方/模型的累计桶，路由记录了费率时各带自己的 `costUsd`——以及整会话 `costUsd`，后者仅在每条计费 token 的路由都有费率且没有样本未归属时出现。归属跟随最后一个 `request/context` 路由。
+持久 `tokenUsage` session 投影在会话尺度携带同样的估算。除扁平 `totals`（对只看计数的消费方保持不变）外，它的 wire 视图新增可选的整会话 `costUsd`：每个用量样本的净 token 变动按最后一个 `request/context` 携带的费率计价并累加到一个运行总额，因此中途切换模型的会话无需按路由的分类账也能正确合计。任何计费样本没有费率时该值缺失。
 
 ### 组合
 

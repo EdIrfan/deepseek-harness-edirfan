@@ -16,28 +16,11 @@ export interface TokenUsageProjection {
   cacheReadTokens: number
   cacheWriteTokens: number
   /**
-   * Whole-session USD cost estimate. Present only when every billed route in
-   * the session logged price rates on its `request/context`. Cache traffic a
-   * provider did not report is priced as zero.
+   * Whole-session USD cost estimate: each usage sample priced at the rates its
+   * `request/context` carried, summed. Present only when every billed sample
+   * had rates. Cache traffic a provider did not report is priced as zero.
    */
   costUsd?: number
-  /**
-   * Per-route spend, in first-seen order. Empty on a session with no
-   * attributed usage. `costUsd` is present on a route only when it logged rates.
-   */
-  byRoute?: readonly TokenUsageRouteSpend[]
-}
-
-/** Cumulative usage and cost estimate for one provider/model route across the session. */
-export interface TokenUsageRouteSpend {
-  readonly provider: string
-  readonly model: string
-  readonly uncachedInputTokens: number
-  readonly outputTokens: number
-  readonly cacheReadTokens: number
-  readonly cacheWriteTokens: number
-  /** USD estimate for this route; absent when the route logged no rates. */
-  readonly costUsd?: number
 }
 
 /**

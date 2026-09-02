@@ -52,12 +52,7 @@ async function resolveAccount(ctx: Context, provider: string): Promise<ModelProv
   let value: ModelProviderAccount | undefined
   try {
     const balance = await ctx.llm.providerAccountBalance(provider, AbortSignal.timeout(ACCOUNT_QUERY_TIMEOUT_MS))
-    value = balance === undefined
-      ? undefined
-      : {
-        ...balance.balanceUsd === undefined ? {} : { balanceUsd: balance.balanceUsd },
-        ...balance.usageUsd === undefined ? {} : { usageUsd: balance.usageUsd },
-      }
+    value = balance?.balanceUsd === undefined ? undefined : { balanceUsd: balance.balanceUsd }
   } catch {
     // A network error, a non-2xx reply, or the 4s timeout: the balance is a
     // display extra, so the group still loads without it. Cached as `undefined`

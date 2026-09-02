@@ -1125,7 +1125,7 @@ function normalizePricing(
     pricing.cacheReadPerMTok, pricing.cacheWritePerMTok,
   ]
   for (const rate of rates) {
-    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) {
+    if (!Number.isFinite(rate) || rate < 0) {
       throw new LlmError(
         `adapter returned invalid price metadata for provider "${provider}" model "${model}"`,
         'INVALID_MODEL_PRICING',
