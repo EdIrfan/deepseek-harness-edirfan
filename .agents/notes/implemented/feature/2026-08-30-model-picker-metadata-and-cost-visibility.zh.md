@@ -69,12 +69,12 @@ Web 模型选择器（composer 模型位与 `/model` 弹窗）只显示模型名
 - 分层定价被舍弃。超大请求的成本数字会用基础费率。当某消费方需要分层准确性时，正确做法是一个 `resolvePricing(provider, model, inputTokens)` 方法，而非静态字段。
 - OpenRouter 路由现在在选择器分组标题显示其剩余额度余额。`buildModelCatalog` 每个 OpenRouter 提供方每 60 秒新增一次有界外发请求；4 秒超时与缓存让它不进入目录的关键路径。非 OpenRouter 提供方不发这类请求。
 - `ACCOUNT_QUERY_FAILED` 是新的 `LlmError` code，在 `account.ts` 内抛出、被 `buildModelCatalog` 吞掉；不会浮现到浏览器。
-- 「本轮用量」面板现在在该轮路由记录了费率时显示估算金额。`request/context` 载荷新增 `turn`、`step` 与可选的 `pricing` 对象，且该事件现在每轮出现一次而非每次变化一次，因此每个含多轮会话的无密钥快照与两个 SDK 的期望输出中的 `request/context` 行都会增多并改形。`pnpm run test:snapshot:refresh` 可无密钥地重新生成它们（不需要 `DEEPSEEK_API_KEY`），但本 fork 的已提交快照已相对当前 normalizer 陈旧（无关的 seq 区间与 ACP `config_option_update` 漂移），因此一次干净的 refresh 会把那些漂移也一并扫入；该 refresh 推迟到本 fork 的快照基线作为一个受审批次被校准。在此之前，本 fork 上 `pnpm run test:snapshot` 与 `pnpm run test:expected` 会出现 diff。
+- 「本轮用量」面板现在在该轮路由记录了费率时显示估算金额。`request/context` 载荷新增 `turn`、`step` 与可选的 `pricing` 对象，且该事件现在每轮出现一次而非每次变化一次，因此每个含多轮会话的无密钥快照与两个 SDK 的期望输出中的 `request/context` 行都会增多并改形。`pnpm run test:snapshot:refresh` 与 `pnpm run test:expected:refresh` 可无密钥地重新生成它们（不需要 `DEEPSEEK_API_KEY`）；本 fork 在合并上游 `0.1.2-alpha.5` 时运行了两者，该次合并同时纳入了此前陈旧基线滞后的上游 `sourceEventSeqs` 区间压缩。
 - `deriveTurnTokenUsage` 现在会读取其输入切片中的 `request/context` 事件（此前忽略它们）。`ui-chat` 的 `turnCoordinates` 把该事件映射到它的 `turn`/`step`，使已完成轮次页脚节点认领它；把 `request/context` 过滤掉的调用方会失去成本估算，但别的不受影响。
 - `RequestContext`（`session.requestContext()` 归并出的值）现在携带它来自的记录的 `turn`/`step`。既有调用方读取 `provider`/`model`/`contextWindow`/`pricing`，不受影响。
 - 持久 `tokenUsage` 投影的 `stateVersion` 提升。预发布策略会重折叠它；没有迁移。它的 wire 视图新增一个可选字段 `costUsd`——断言 `tokenUsage` 视图的 SDK 期望输出在同一批次里刷新。
 - `/cost` 命令被推迟；`plans/005-session-cost-rollup.md`（在会话 scratchpad，不在仓库）里有规格，日后如需可用。
-- 实施环境中没有 `DEEPSEEK_API_KEY`（仅 OpenRouter）；选择器行的 Web e2e 以及无密钥的快照 refresh（见上）被推迟。单元、宿主集成与 React 组件测试覆盖了管道与渲染。
+- 实施环境中没有 `DEEPSEEK_API_KEY`（仅 OpenRouter）；选择器行的 Web e2e 被推迟。单元、宿主集成与 React 组件测试覆盖了管道与渲染。
 - OpenRouter 余额查询需要真实密钥与网络才能端到端演练；随附测试对 `fetch` 打桩，绝不断言真实密钥值。
 - `resetAccountCacheForTests()` 是 `catalog.ts` 上仅供测试的导出，让一个测试套件第二次 `buildModelCatalog` 重新查询而非复用 60 秒缓存。
 
